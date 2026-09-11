@@ -23,3 +23,21 @@ dev = [
     "ruff>=0.16.6",
     "mypy>=2.3.1",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["CONTEXTO inicial"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["."]
