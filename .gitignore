@@ -1,0 +1,22 @@
+# Entorno virtual y cache de uv/Python
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Variables de entorno locales
+.env
+.env.local
+
+# Artefactos de IDE / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Cobertura de tests
+.coverage
+htmlcov/

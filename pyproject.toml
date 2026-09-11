@@ -1,0 +1,25 @@
+[project]
+name = "mesa-de-ayuda-comunicarlos"
+version = "0.1.0"
+description = "Mesa de Ayuda - Cooperativa Comunicarlos - PP5"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic[email]>=2.0",
+    "pydantic-settings>=2.0",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-jose[cryptography]>=3.3",
+    "bcrypt>=4.0",
+    "pymongo>=4.7",
+    "pyqt6>=6.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.28",
+    "mongomock>=4.1",
+    "ruff>=0.16.6",
+    "mypy>=2.3.1",
+]
