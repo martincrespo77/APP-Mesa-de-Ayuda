@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from app.compartido.excepciones import DominioError
 from app.errores import codigo_http_para
+from app.requerimientos.router import router as router_requerimientos
 from app.usuarios.router import router as router_usuarios
 
 app = FastAPI(title="Mesa de Ayuda - Cooperativa Comunicarlos")
@@ -22,3 +23,4 @@ def verificar_salud() -> dict[str, str]:
 
 
 app.include_router(router_usuarios)
+app.include_router(router_requerimientos)
