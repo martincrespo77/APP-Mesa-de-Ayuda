@@ -18,6 +18,7 @@ from app.requerimientos.excepciones import (
     TransicionInvalidaError,
 )
 from app.requerimientos.fabrica import FabricaRequerimientos
+from app.requerimientos.repositorio import RepositorioRequerimientos
 
 __all__ = [
     "Requerimiento",
@@ -30,6 +31,7 @@ __all__ = [
     "EventoRequerimiento",
     "TipoEventoRequerimiento",
     "FabricaRequerimientos",
+    "RepositorioRequerimientos",
     "RequerimientoError",
     "TransicionInvalidaError",
     "TecnicoNoAsignadoError",
