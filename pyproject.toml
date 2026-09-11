@@ -13,6 +13,7 @@ dependencies = [
     "bcrypt>=4.0",
     "pymongo>=4.7",
     "pyqt6>=6.6",
+    "python-multipart>=0.0.32",
 ]
 
 [dependency-groups]
@@ -32,6 +33,9 @@ extend-exclude = ["CONTEXTO inicial"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
+# B008: "function call in default argument" es el idioma estandar de FastAPI
+# (Depends(...), Query(...), etc.); marcarlo como error seria puro ruido.
+ignore = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"
