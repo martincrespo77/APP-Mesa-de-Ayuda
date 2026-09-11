@@ -1,10 +1,13 @@
 """Entidad concreta `Incidente`: interrupción o degradación de un servicio."""
 
 import uuid
+from datetime import datetime
 from enum import StrEnum
+from typing import cast
 
 from app.requerimientos.dominio.base import Requerimiento
-from app.requerimientos.dominio.estados import TipoRequerimiento
+from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerimiento
+from app.requerimientos.eventos import EventoRequerimiento
 
 
 class Severidad(StrEnum):
@@ -37,6 +40,43 @@ class Incidente(Requerimiento):
     @property
     def tipo(self) -> TipoRequerimiento:
         return TipoRequerimiento.INCIDENTE
+
+    @classmethod
+    def reconstruir(
+        cls,
+        *,
+        id: uuid.UUID,
+        titulo: str,
+        descripcion: str,
+        solicitante_id: uuid.UUID,
+        estado: EstadoRequerimiento,
+        fecha_creacion: datetime,
+        tecnico_asignado_id: uuid.UUID | None,
+        nota_resolucion: str | None,
+        historial: list[EventoRequerimiento],
+        severidad: Severidad,
+        pasos_reproduccion: str,
+        servicio_afectado: str,
+    ) -> "Incidente":
+        """Reconstruye un `Incidente` ya persistido (uso exclusivo de repositorios)."""
+        instancia = cast(
+            "Incidente",
+            cls._reconstruir_base(
+                id=id,
+                titulo=titulo,
+                descripcion=descripcion,
+                solicitante_id=solicitante_id,
+                estado=estado,
+                fecha_creacion=fecha_creacion,
+                tecnico_asignado_id=tecnico_asignado_id,
+                nota_resolucion=nota_resolucion,
+                historial=historial,
+            ),
+        )
+        instancia.severidad = severidad
+        instancia.pasos_reproduccion = pasos_reproduccion
+        instancia.servicio_afectado = servicio_afectado
+        return instancia
 
     @staticmethod
     def _validar_severidad(severidad: Severidad) -> Severidad:

@@ -3,9 +3,11 @@
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import cast
 
 from app.requerimientos.dominio.base import Requerimiento
-from app.requerimientos.dominio.estados import TipoRequerimiento
+from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerimiento
+from app.requerimientos.eventos import EventoRequerimiento
 
 
 class CategoriaSolicitud(StrEnum):
@@ -38,6 +40,43 @@ class Solicitud(Requerimiento):
     @property
     def tipo(self) -> TipoRequerimiento:
         return TipoRequerimiento.SOLICITUD
+
+    @classmethod
+    def reconstruir(
+        cls,
+        *,
+        id: uuid.UUID,
+        titulo: str,
+        descripcion: str,
+        solicitante_id: uuid.UUID,
+        estado: EstadoRequerimiento,
+        fecha_creacion: datetime,
+        tecnico_asignado_id: uuid.UUID | None,
+        nota_resolucion: str | None,
+        historial: list[EventoRequerimiento],
+        categoria: CategoriaSolicitud,
+        fecha_limite: datetime,
+        impacto_estimado: str,
+    ) -> "Solicitud":
+        """Reconstruye una `Solicitud` ya persistida (uso exclusivo de repositorios)."""
+        instancia = cast(
+            "Solicitud",
+            cls._reconstruir_base(
+                id=id,
+                titulo=titulo,
+                descripcion=descripcion,
+                solicitante_id=solicitante_id,
+                estado=estado,
+                fecha_creacion=fecha_creacion,
+                tecnico_asignado_id=tecnico_asignado_id,
+                nota_resolucion=nota_resolucion,
+                historial=historial,
+            ),
+        )
+        instancia.categoria = categoria
+        instancia.fecha_limite = fecha_limite
+        instancia.impacto_estimado = impacto_estimado
+        return instancia
 
     @staticmethod
     def _validar_categoria(categoria: CategoriaSolicitud) -> CategoriaSolicitud:

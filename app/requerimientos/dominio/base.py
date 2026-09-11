@@ -60,6 +60,40 @@ class Requerimiento(ABC):
     def tipo(self) -> TipoRequerimiento:
         """Discriminador polimórfico: `INCIDENTE` o `SOLICITUD`."""
 
+    @classmethod
+    def _reconstruir_base(
+        cls,
+        *,
+        id: uuid.UUID,
+        titulo: str,
+        descripcion: str,
+        solicitante_id: uuid.UUID,
+        estado: EstadoRequerimiento,
+        fecha_creacion: datetime,
+        tecnico_asignado_id: uuid.UUID | None,
+        nota_resolucion: str | None,
+        historial: list[EventoRequerimiento],
+    ) -> "Requerimiento":
+        """Reconstruye los campos comunes de un requerimiento ya existente.
+
+        A diferencia de `__init__` (reservado a requerimientos NUEVOS), no
+        registra un evento `CREACION`: restaura el historial real tal como
+        vino de persistencia. Uso exclusivo de los repositorios concretos
+        (Paso 5) a través de `Incidente.reconstruir`/`Solicitud.reconstruir`
+        y `FabricaRequerimientos.reconstruir` — nunca desde servicios.
+        """
+        instancia = cls.__new__(cls)
+        instancia.id = id
+        instancia.titulo = titulo
+        instancia.descripcion = descripcion
+        instancia.solicitante_id = solicitante_id
+        instancia.estado = estado
+        instancia.fecha_creacion = fecha_creacion
+        instancia.tecnico_asignado_id = tecnico_asignado_id
+        instancia.nota_resolucion = nota_resolucion
+        instancia._historial = list(historial)
+        return instancia
+
     # -- Transiciones de estado ------------------------------------------------
 
     def iniciar_analisis(self, autor_id: uuid.UUID, rol_actor: RolUsuario) -> EventoRequerimiento:

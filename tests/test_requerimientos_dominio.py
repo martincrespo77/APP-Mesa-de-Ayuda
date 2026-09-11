@@ -19,6 +19,7 @@ from app.requerimientos.dominio import (
     Solicitud,
     TipoRequerimiento,
 )
+from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
 from app.requerimientos.excepciones import (
     NotaResolucionRequeridaError,
     PermisoDenegadoError,
@@ -340,3 +341,118 @@ class TestFabricaRequerimientos:
         # Act & Assert
         with pytest.raises(ValueError):
             FabricaRequerimientos.crear("TIPO_INEXISTENTE")  # type: ignore[arg-type]
+
+
+class TestReconstruccionDesdePersistencia:
+    """Cubre `reconstruir`: la vía de lectura desde Mongo (Paso 5), que NO
+    debe comportarse como una creación nueva (sin evento CREACION espurio,
+    con el estado/historial real tal como estaba persistido)."""
+
+    def test_reconstruir_incidente_no_agrega_evento_creacion(
+        self, solicitante_id: uuid.UUID, tecnico_id: uuid.UUID
+    ) -> None:
+        # Arrange: un evento de historial "real" ya persistido, distinto al
+        # que generaría un __init__ nuevo.
+        evento_original = EventoRequerimiento(
+            requerimiento_id=uuid.uuid4(),
+            tipo_evento=TipoEventoRequerimiento.CREACION,
+            autor_id=solicitante_id,
+            detalle="Evento tal cual vino de Mongo.",
+        )
+        fecha_creacion_original = datetime.now(UTC) - timedelta(days=10)
+
+        # Act
+        incidente = Incidente.reconstruir(
+            id=uuid.uuid4(),
+            titulo="Corte de fibra troncal",
+            descripcion="Sin conectividad en el barrio Centro.",
+            solicitante_id=solicitante_id,
+            estado=EstadoRequerimiento.EN_PROGRESO,
+            fecha_creacion=fecha_creacion_original,
+            tecnico_asignado_id=tecnico_id,
+            nota_resolucion=None,
+            historial=[evento_original],
+            severidad=Severidad.CRITICA,
+            pasos_reproduccion="Verificar ONT sin luz de señal.",
+            servicio_afectado="Fibra óptica residencial",
+        )
+
+        # Assert: se restauró tal cual, sin generar un evento CREACION nuevo
+        assert incidente.estado == EstadoRequerimiento.EN_PROGRESO
+        assert incidente.fecha_creacion == fecha_creacion_original
+        assert incidente.tecnico_asignado_id == tecnico_id
+        assert incidente.historial == [evento_original]
+        assert incidente.severidad == Severidad.CRITICA
+
+    def test_incidente_reconstruido_sigue_pudiendo_transicionar(
+        self, solicitante_id: uuid.UUID, tecnico_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        incidente = Incidente.reconstruir(
+            id=uuid.uuid4(),
+            titulo="x",
+            descripcion="y",
+            solicitante_id=solicitante_id,
+            estado=EstadoRequerimiento.EN_PROGRESO,
+            fecha_creacion=datetime.now(UTC),
+            tecnico_asignado_id=tecnico_id,
+            nota_resolucion=None,
+            historial=[],
+            severidad=Severidad.BAJA,
+            pasos_reproduccion="p",
+            servicio_afectado="s",
+        )
+
+        # Act
+        incidente.resolver("Resuelto tras reconstrucción.", tecnico_id, RolUsuario.TECNICO)
+
+        # Assert
+        assert incidente.estado == EstadoRequerimiento.RESUELTO
+
+    def test_reconstruir_solicitud_permite_fecha_limite_pasada(
+        self, solicitante_id: uuid.UUID
+    ) -> None:
+        # Arrange: una solicitud histórica cuyo plazo ya venció (el
+        # constructor normal la rechazaría por `_validar_fecha_limite`)
+        fecha_pasada = datetime.now(UTC) - timedelta(days=30)
+
+        # Act
+        solicitud = Solicitud.reconstruir(
+            id=uuid.uuid4(),
+            titulo="Alta de nuevo abono",
+            descripcion="Cliente solicita nueva conexión.",
+            solicitante_id=solicitante_id,
+            estado=EstadoRequerimiento.CERRADO,
+            fecha_creacion=fecha_pasada,
+            tecnico_asignado_id=None,
+            nota_resolucion=None,
+            historial=[],
+            categoria=CategoriaSolicitud.NUEVO_SERVICIO,
+            fecha_limite=fecha_pasada,
+            impacto_estimado="Bajo",
+        )
+
+        # Assert
+        assert solicitud.fecha_limite == fecha_pasada
+        assert solicitud.estado == EstadoRequerimiento.CERRADO
+
+    def test_fabrica_reconstruir_dispatchea_por_tipo(self, solicitante_id: uuid.UUID) -> None:
+        # Act
+        req = FabricaRequerimientos.reconstruir(
+            TipoRequerimiento.INCIDENTE,
+            id=uuid.uuid4(),
+            titulo="x",
+            descripcion="y",
+            solicitante_id=solicitante_id,
+            estado=EstadoRequerimiento.ABIERTO,
+            fecha_creacion=datetime.now(UTC),
+            tecnico_asignado_id=None,
+            nota_resolucion=None,
+            historial=[],
+            severidad=Severidad.MEDIA,
+            pasos_reproduccion="p",
+            servicio_afectado="s",
+        )
+
+        # Assert
+        assert isinstance(req, Incidente)
