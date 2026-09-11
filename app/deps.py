@@ -1,20 +1,24 @@
 """Inyección de dependencias de FastAPI: identidad, repositorios y roles.
 
-Los proveedores de repositorio concreto (`obtener_repositorio_usuarios`,
-`obtener_repositorio_requerimientos`) quedan con `NotImplementedError`
-hasta el Paso 5 (PyMongo). FastAPI no ejecuta `Depends()` al iniciar la
-app, así que Swagger renderiza igual; los tests de integración de routers
-los sobreescriben con `app.dependency_overrides` + los `Fake*` de
-`tests/fakes.py`.
+Los repositorios concretos (PyMongo, Paso 5) se construyen sobre la base
+de datos abierta en el lifespan de la app (`app/main.py`):
+`_obtener_base_datos_mongo` la toma de `request.app.state.db`. Los tests
+de integración de routers sobreescriben `obtener_repositorio_usuarios`/
+`obtener_repositorio_requerimientos` con `app.dependency_overrides` + los
+`Fake*` de `tests/fakes.py`, así que nunca necesitan una conexión real.
 """
 
 from collections.abc import Callable
+from typing import Any, cast
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
+from pymongo.database import Database
 
 from app.auth import TokenInvalidoError, decodificar_token
 from app.compartido.dominio import RolUsuario
+from app.infraestructura.repo_requerimientos import RepositorioRequerimientosMongo
+from app.infraestructura.repo_usuarios import RepositorioUsuariosMongo
 from app.notificaciones.despachador import DespachadorEventos
 from app.notificaciones.observador_logger import ObservadorLogger
 from app.requerimientos.repositorio import RepositorioRequerimientos
@@ -33,20 +37,27 @@ _despachador_eventos = DespachadorEventos()
 _despachador_eventos.suscribir(ObservadorLogger())
 
 
-def obtener_repositorio_usuarios() -> RepositorioUsuarios:
-    """Provee el repositorio concreto de usuarios (PyMongo, Paso 5)."""
-    raise NotImplementedError(
-        "RepositorioUsuarios concreto pendiente del Paso 5 (PyMongo). "
-        "En tests, sobreescribir con app.dependency_overrides + FakeRepositorioUsuarios."
-    )
+def _obtener_base_datos_mongo(request: Request) -> Database[dict[str, Any]]:
+    """Recupera la base de datos abierta en el lifespan de la app.
+
+    `app.state` es dinámico (no tipado por Starlette): el `cast` documenta
+    la expectativa de que `app/main.py` la dejó ahí durante el lifespan.
+    """
+    return cast("Database[dict[str, Any]]", request.app.state.db)
 
 
-def obtener_repositorio_requerimientos() -> RepositorioRequerimientos:
-    """Provee el repositorio concreto de requerimientos (PyMongo, Paso 5)."""
-    raise NotImplementedError(
-        "RepositorioRequerimientos concreto pendiente del Paso 5 (PyMongo). "
-        "En tests, sobreescribir con app.dependency_overrides + FakeRepositorioRequerimientos."
-    )
+def obtener_repositorio_usuarios(
+    db: Database[dict[str, Any]] = Depends(_obtener_base_datos_mongo),
+) -> RepositorioUsuarios:
+    """Provee el repositorio concreto de usuarios (PyMongo)."""
+    return RepositorioUsuariosMongo(db)
+
+
+def obtener_repositorio_requerimientos(
+    db: Database[dict[str, Any]] = Depends(_obtener_base_datos_mongo),
+) -> RepositorioRequerimientos:
+    """Provee el repositorio concreto de requerimientos (PyMongo)."""
+    return RepositorioRequerimientosMongo(db)
 
 
 def obtener_despachador_eventos() -> DespachadorEventos:

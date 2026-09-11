@@ -1,7 +1,8 @@
 """Tests de integración del router de usuarios (TestClient + dependency_overrides).
 
 No requiere MongoDB: `obtener_repositorio_usuarios` se sobreescribe con
-`FakeRepositorioUsuarios` para cada test.
+`FakeRepositorioUsuarios` para cada test, y el lifespan real de la app
+(que sí abre una conexión Mongo, Paso 5) se sobreescribe con un no-op.
 """
 
 import uuid
@@ -16,6 +17,7 @@ from app.deps import obtener_repositorio_usuarios
 from app.main import app
 from app.usuarios.dominio import Usuario
 from tests.fakes import FakeRepositorioUsuarios
+from tests.lifespan import lifespan_vacio
 
 _PASSWORD_SUPERVISOR = "clave-segura-1"
 _PASSWORD_TECNICO = "clave-segura-2"
@@ -29,9 +31,12 @@ def repositorio() -> FakeRepositorioUsuarios:
 @pytest.fixture
 def cliente(repositorio: FakeRepositorioUsuarios) -> Generator[TestClient, None, None]:
     app.dependency_overrides[obtener_repositorio_usuarios] = lambda: repositorio
+    lifespan_original = app.router.lifespan_context
+    app.router.lifespan_context = lifespan_vacio
     with TestClient(app) as cliente_de_prueba:
         yield cliente_de_prueba
     app.dependency_overrides.clear()
+    app.router.lifespan_context = lifespan_original
 
 
 @pytest.fixture

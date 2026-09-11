@@ -1,4 +1,9 @@
-"""Tests de integración del router de requerimientos (TestClient + overrides)."""
+"""Tests de integración del router de requerimientos (TestClient + overrides).
+
+No requiere MongoDB: los repositorios concretos se sobreescriben con
+`Fake*` para cada test, y el lifespan real de la app (que sí abre una
+conexión Mongo, Paso 5) se sobreescribe con un no-op.
+"""
 
 import uuid
 from collections.abc import Generator
@@ -13,6 +18,7 @@ from app.deps import obtener_repositorio_requerimientos, obtener_repositorio_usu
 from app.main import app
 from app.usuarios.dominio import Usuario
 from tests.fakes import FakeRepositorioRequerimientos, FakeRepositorioUsuarios
+from tests.lifespan import lifespan_vacio
 
 _PASSWORD = "clave-segura-1"
 
@@ -33,9 +39,12 @@ def cliente(
 ) -> Generator[TestClient, None, None]:
     app.dependency_overrides[obtener_repositorio_usuarios] = lambda: repo_usuarios
     app.dependency_overrides[obtener_repositorio_requerimientos] = lambda: repo_requerimientos
+    lifespan_original = app.router.lifespan_context
+    app.router.lifespan_context = lifespan_vacio
     with TestClient(app) as cliente_de_prueba:
         yield cliente_de_prueba
     app.dependency_overrides.clear()
+    app.router.lifespan_context = lifespan_original
 
 
 def _crear_usuario(repo: FakeRepositorioUsuarios, email: str, rol: RolUsuario) -> Usuario:
