@@ -29,8 +29,13 @@ def crear_cliente_mongo(settings: Settings) -> MongoClient[dict[str, Any]]:
     PyMongo es perezoso: instanciar el cliente no abre una conexión de red
     por sí solo, eso ocurre recién en la primera operación real (aquí,
     dentro de `crear_indices`).
+
+    `tz_aware=True` hace que PyMongo devuelva los `datetime` leídos de Mongo
+    con tzinfo en UTC, en vez de `datetime` naive: el dominio (`fecha_creacion`,
+    `fecha_limite`, `EventoRequerimiento.timestamp`) siempre trabaja con
+    `datetime.now(UTC)` y comparar un naive contra un aware lanza `TypeError`.
     """
-    return MongoClient(settings.MONGODB_URL)
+    return MongoClient(settings.MONGODB_URL, tz_aware=True)
 
 
 def obtener_base_datos(
