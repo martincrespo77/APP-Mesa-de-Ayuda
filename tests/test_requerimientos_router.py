@@ -88,6 +88,8 @@ class TestCrear:
         assert respuesta.status_code == 201
         assert respuesta.json()["tipo"] == "INCIDENTE"
         assert respuesta.json()["estado"] == "ABIERTO"
+        assert len(respuesta.json()["historial"]) == 1
+        assert respuesta.json()["historial"][0]["tipo_evento"] == "CREACION"
 
     def test_crear_solicitud_devuelve_201_con_tipo_solicitud(
         self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios

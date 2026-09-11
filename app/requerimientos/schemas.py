@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.requerimientos.dominio.estados import EstadoRequerimiento
 from app.requerimientos.dominio.incidente import Severidad
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud
+from app.requerimientos.eventos import TipoEventoRequerimiento
 
 # -- Requests de creación -----------------------------------------------------
 
@@ -58,6 +59,18 @@ class ResolverRequest(BaseModel):
 # -- Responses -----------------------------------------------------------------
 
 
+class EventoResponse(BaseModel):
+    """Un evento de auditoría del historial de un requerimiento."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    tipo_evento: TipoEventoRequerimiento
+    autor_id: uuid.UUID
+    detalle: str
+    timestamp: datetime
+
+
 class _RequerimientoResponseBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -69,6 +82,7 @@ class _RequerimientoResponseBase(BaseModel):
     fecha_creacion: datetime
     tecnico_asignado_id: uuid.UUID | None
     nota_resolucion: str | None
+    historial: list[EventoResponse]
 
 
 class IncidenteResponse(_RequerimientoResponseBase):
