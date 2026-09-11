@@ -21,3 +21,7 @@ class NotaResolucionRequeridaError(RequerimientoError):
 
 class PermisoDenegadoError(RequerimientoError):
     """Lanzada cuando el rol o la identidad del actor no autoriza la operación solicitada."""
+
+
+class RequerimientoNoEncontradoError(RequerimientoError):
+    """Lanzada al operar sobre un id de requerimiento que no existe en el repositorio."""
