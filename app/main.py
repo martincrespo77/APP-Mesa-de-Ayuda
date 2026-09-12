@@ -1,5 +1,6 @@
 """Punto de entrada de la API FastAPI: instancia la app y monta los routers."""
 
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -12,6 +13,16 @@ from app.errores import codigo_http_para
 from app.infraestructura.database import crear_cliente_mongo, crear_indices, obtener_base_datos
 from app.requerimientos.router import router as router_requerimientos
 from app.usuarios.router import router as router_usuarios
+
+# Sin esto, `ObservadorLogger` (Paso 3, app/notificaciones/observador_logger.py)
+# escribe a un logger ("mesa_de_ayuda.auditoria") sin ningún handler
+# configurado en ningún lado de la app: sus mensajes INFO se descartan en
+# silencio en cualquier corrida real (local o Docker) — solo "funcionan"
+# en los tests porque `caplog` de pytest los captura sin necesitar handler.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 
 @asynccontextmanager
