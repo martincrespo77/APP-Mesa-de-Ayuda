@@ -1,0 +1,34 @@
+# Orquesta la API y MongoDB (doc06). El healthcheck de `mongo` + la
+# condición `service_healthy` en `depends_on` son un agregado sobre el
+# ejemplo de doc06: el lifespan de la API (app/main.py) hace una conexión
+# real a Mongo al arrancar (crear_indices), así que si el contenedor de
+# `api` arranca antes de que Mongo acepte conexiones, falla.
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017
+      - MONGODB_DB_NAME=mesa_de_ayuda
+      - SECRET_KEY=clave-de-prueba-local-12345
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo_data:

@@ -1,0 +1,26 @@
+# Entorno virtual y cache de uv/Python (se reconstruyen dentro de la imagen)
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Variables de entorno locales: en Docker se inyectan vía docker-compose.yml
+.env
+.env.local
+
+# Control de versiones y artefactos de IDE/OS
+.git/
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Cobertura de tests
+.coverage
+htmlcov/
+
+# Documentación de cátedra: no hace falta dentro de la imagen
+CONTEXTO inicial/
