@@ -1,0 +1,307 @@
+/* Tema oscuro alineado a desktop/styles.py (mismos tokens de color). */
+
+:root {
+    --fondo: #1e1e2e;
+    --tarjeta: #252538;
+    --acento-violeta: #7c3aed;
+    --acento-violeta-hover: #6d28d9;
+    --acento-azul: #3b82f6;
+    --texto: #e2e2f0;
+    --texto-secundario: #9a9ab0;
+    --borde: #3a3a52;
+    --verde: #22c55e;
+    --naranja: #f59e0b;
+    --rojo: #ef4444;
+    --gris: #6b7280;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--fondo);
+    color: var(--texto);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 15px;
+}
+
+.contenedor {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+}
+
+.tarjeta {
+    background-color: var(--tarjeta);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 20px;
+}
+
+h1 {
+    font-size: 22px;
+    margin: 0 0 4px;
+}
+
+h2 {
+    font-size: 17px;
+    margin: 0 0 12px;
+}
+
+.subtitulo {
+    color: var(--texto-secundario);
+    margin: 0 0 24px;
+    font-size: 14px;
+}
+
+label {
+    display: block;
+    margin: 14px 0 6px;
+    font-size: 13px;
+    color: var(--texto-secundario);
+}
+
+input,
+select,
+textarea {
+    width: 100%;
+    background-color: var(--fondo);
+    border: 1px solid var(--borde);
+    border-radius: 4px;
+    padding: 10px;
+    color: var(--texto);
+    font-family: inherit;
+    font-size: 14px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--acento-azul);
+}
+
+textarea {
+    resize: vertical;
+    min-height: 70px;
+}
+
+button {
+    cursor: pointer;
+    background-color: var(--acento-violeta);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 18px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+button:hover {
+    background-color: var(--acento-violeta-hover);
+}
+
+button:disabled {
+    background-color: var(--borde);
+    color: var(--texto-secundario);
+    cursor: not-allowed;
+}
+
+button.secundario {
+    background-color: transparent;
+    border: 1px solid var(--acento-azul);
+    color: var(--acento-azul);
+}
+
+.error {
+    color: var(--rojo);
+    font-size: 13px;
+    margin-top: 12px;
+}
+
+.exito {
+    color: var(--verde);
+    font-size: 13px;
+    margin-top: 12px;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+/* -- Portal (app.html) -- */
+
+.contenedor-ancho {
+    max-width: 860px;
+}
+
+header.encabezado {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.usuario-actual {
+    text-align: right;
+    font-size: 13px;
+    color: var(--texto-secundario);
+}
+
+.pestanas {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--borde);
+    margin-bottom: 20px;
+}
+
+.pestana {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: var(--texto-secundario);
+    padding: 10px 16px;
+    font-weight: 600;
+}
+
+.pestana:hover {
+    background-color: var(--tarjeta);
+}
+
+.pestana.activa {
+    color: var(--texto);
+    border-bottom-color: var(--acento-violeta);
+}
+
+.fila {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.fila > * {
+    flex: 1 1 200px;
+}
+
+.lista-tickets {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ticket {
+    background-color: var(--tarjeta);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 14px 16px;
+    cursor: pointer;
+}
+
+.ticket:hover {
+    border-color: var(--acento-azul);
+}
+
+.ticket-encabezado {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.ticket-titulo {
+    font-weight: 600;
+}
+
+.ticket-meta {
+    color: var(--texto-secundario);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    color: white;
+}
+
+.badge-ABIERTO { background-color: var(--acento-azul); }
+.badge-EN_ANALISIS,
+.badge-EN_PROGRESO { background-color: var(--naranja); }
+.badge-RESUELTO,
+.badge-CERRADO { background-color: var(--verde); }
+.badge-CANCELADO { background-color: var(--gris); }
+
+.badge-BAJA { background-color: var(--verde); }
+.badge-MEDIA { background-color: var(--naranja); }
+.badge-ALTA,
+.badge-CRITICA { background-color: var(--rojo); }
+
+.vacio {
+    color: var(--texto-secundario);
+    text-align: center;
+    padding: 32px 0;
+}
+
+.superposicion {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px;
+    overflow-y: auto;
+}
+
+.superposicion .tarjeta {
+    max-width: 560px;
+    width: 100%;
+}
+
+.detalle-fila {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--borde);
+    font-size: 13px;
+}
+
+.detalle-fila span:first-child {
+    color: var(--texto-secundario);
+}
+
+.historial-evento {
+    font-size: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--borde);
+}
+
+.historial-evento .tipo {
+    font-weight: 700;
+    color: var(--acento-azul);
+}
+
+.historial-evento .fecha {
+    color: var(--texto-secundario);
+}
+
+@media (max-width: 480px) {
+    .contenedor {
+        padding: 16px 12px 40px;
+    }
+
+    .fila {
+        flex-direction: column;
+    }
+}

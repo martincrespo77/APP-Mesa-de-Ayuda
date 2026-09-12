@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.compartido.excepciones import DominioError
 from app.config import get_settings
@@ -57,3 +58,10 @@ def verificar_salud() -> dict[str, str]:
 
 app.include_router(router_usuarios)
 app.include_router(router_requerimientos)
+
+# Montado al final y en la raíz ("/"): las rutas de API ya registradas arriba
+# siguen resolviendo primero (FastAPI matchea en orden de registro), así que
+# este mount solo captura lo que ningún router respondió (el portal web
+# estático). Mismo origen que la API => sin necesidad de CORS, ni desde el
+# celular en la red local.
+app.mount("/", StaticFiles(directory="web", html=True), name="web")
