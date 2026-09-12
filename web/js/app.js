@@ -192,12 +192,26 @@ document.getElementById("boton-refrescar").addEventListener("click", cargarLista
 // -- Modal de detalle --------------------------------------------------------------
 
 const modal = document.getElementById("modal-detalle");
+const botonCancelarTicket = document.getElementById("boton-cancelar-ticket");
+const botonConfirmarCierre = document.getElementById("boton-confirmar-cierre");
+const errorDetalle = document.getElementById("error-detalle");
+
+let ticketActualId = null;
 
 function filaDetalle(etiqueta, valor) {
     return `<div class="detalle-fila"><span>${etiqueta}</span><span>${valor}</span></div>`;
 }
 
 function mostrarDetalle(ticket) {
+    ticketActualId = ticket.id;
+    errorDetalle.hidden = true;
+    // El dominio (Requerimiento.cancelar/cerrar) solo habilita al Solicitante
+    // a cancelar un ticket propio en ABIERTO o dar conformidad sobre uno
+    // RESUELTO — las demás transiciones quedan reservadas al cliente de
+    // escritorio (Operador/Técnico/Supervisor).
+    botonCancelarTicket.hidden = ticket.estado !== "ABIERTO";
+    botonConfirmarCierre.hidden = ticket.estado !== "RESUELTO";
+
     document.getElementById("detalle-titulo").textContent = ticket.titulo;
 
     const filas = [
@@ -255,6 +269,40 @@ document.getElementById("boton-cerrar-modal").addEventListener("click", () => {
 modal.addEventListener("click", (evento) => {
     if (evento.target === modal) modal.hidden = true;
 });
+
+async function ejecutarAccionTicket(accion, mensajeConfirmacion, boton) {
+    if (!window.confirm(mensajeConfirmacion)) return;
+    errorDetalle.hidden = true;
+    boton.disabled = true;
+    try {
+        const actualizado = await apiFetchJson(`/requerimientos/${ticketActualId}/${accion}`, {
+            method: "POST",
+        });
+        mostrarDetalle(actualizado);
+        cargarListado();
+    } catch (error) {
+        errorDetalle.textContent = error.message;
+        errorDetalle.hidden = false;
+    } finally {
+        boton.disabled = false;
+    }
+}
+
+botonCancelarTicket.addEventListener("click", () =>
+    ejecutarAccionTicket(
+        "cancelar",
+        "¿Cancelar este ticket? La acción no se puede deshacer.",
+        botonCancelarTicket,
+    ),
+);
+
+botonConfirmarCierre.addEventListener("click", () =>
+    ejecutarAccionTicket(
+        "cerrar",
+        "¿Confirmar el cierre de este ticket?",
+        botonConfirmarCierre,
+    ),
+);
 
 // -- Inicio ---------------------------------------------------------------------
 
