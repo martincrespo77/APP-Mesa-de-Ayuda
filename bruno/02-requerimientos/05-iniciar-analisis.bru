@@ -1,0 +1,19 @@
+meta {
+  name: 05 Iniciar Análisis (Operador)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/requerimientos/{{incidente_id}}/iniciar-analisis
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_operador}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.estado: eq EN_ANALISIS
+}

@@ -1,0 +1,27 @@
+meta {
+  name: 09 Obtener Mi Perfil (Técnico)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{base_url}}/usuarios/me
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_tecnico}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.rol: eq TECNICO
+}
+
+script:post-response {
+  bru.setEnvVar("tecnico_id", res.body.id);
+}
+
+docs {
+  Guarda el id del técnico para usarlo en `02-requerimientos/06-asignar-tecnico.bru`.
+}

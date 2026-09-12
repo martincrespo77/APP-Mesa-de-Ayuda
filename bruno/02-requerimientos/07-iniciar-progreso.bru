@@ -1,0 +1,19 @@
+meta {
+  name: 07 Iniciar Progreso (Técnico asignado)
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/requerimientos/{{incidente_id}}/iniciar-progreso
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_tecnico}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.estado: eq EN_PROGRESO
+}

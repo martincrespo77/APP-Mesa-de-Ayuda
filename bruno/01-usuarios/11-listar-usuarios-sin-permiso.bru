@@ -1,0 +1,23 @@
+meta {
+  name: 11 Listar Usuarios sin Permiso (403 esperado)
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{base_url}}/usuarios
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_solicitante}}
+}
+
+assert {
+  res.status: eq 403
+}
+
+docs {
+  Matriz de roles (doc02): un SOLICITANTE no puede administrar usuarios.
+  Verifica que `requerir_rol(SUPERVISOR)` efectivamente bloquea.
+}

@@ -1,0 +1,23 @@
+meta {
+  name: 11 Transición Inválida sobre Requerimiento Cerrado (409 esperado)
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{base_url}}/requerimientos/{{incidente_id}}/iniciar-analisis
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_operador}}
+}
+
+assert {
+  res.status: eq 409
+}
+
+docs {
+  El incidente ya está CERRADO (request 09): reintentar iniciar-analisis
+  debe fallar con TransicionInvalidaError -> 409, no con un 500.
+}

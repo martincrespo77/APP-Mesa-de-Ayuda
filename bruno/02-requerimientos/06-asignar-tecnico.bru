@@ -1,0 +1,32 @@
+meta {
+  name: 06 Asignar Técnico (Operador)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/requerimientos/{{incidente_id}}/asignar-tecnico
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_operador}}
+}
+
+body:json {
+  {
+    "tecnico_id": "{{tecnico_id}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.tecnico_asignado_id: eq {{tecnico_id}}
+  res.body.estado: eq EN_ANALISIS
+}
+
+docs {
+  Asignar técnico NO cambia el estado (sigue en EN_ANALISIS): solo el
+  posterior `iniciar-progreso` lo hace.
+}

@@ -1,0 +1,19 @@
+meta {
+  name: 10 Cancelar Solicitud (Solicitante, mientras ABIERTO)
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{base_url}}/requerimientos/{{solicitud_id}}/cancelar
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_solicitante}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.estado: eq CANCELADO
+}

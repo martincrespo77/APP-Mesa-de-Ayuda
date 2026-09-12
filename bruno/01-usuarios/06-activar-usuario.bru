@@ -1,0 +1,19 @@
+meta {
+  name: 06 Reactivar Usuario
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{base_url}}/usuarios/{{usuario_creado_id}}/activar
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_supervisor}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.activo: eq true
+}

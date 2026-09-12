@@ -1,0 +1,27 @@
+meta {
+  name: 08 Resolver (Técnico asignado)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/requerimientos/{{incidente_id}}/resolver
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_tecnico}}
+}
+
+body:json {
+  {
+    "nota_resolucion": "Se reemplazó el ONT dañado (Bruno)."
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.estado: eq RESUELTO
+  res.body.nota_resolucion: eq Se reemplazó el ONT dañado (Bruno).
+}

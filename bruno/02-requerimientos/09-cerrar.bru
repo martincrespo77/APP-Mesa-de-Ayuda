@@ -1,0 +1,24 @@
+meta {
+  name: 09 Cerrar (Solicitante propio)
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{base_url}}/requerimientos/{{incidente_id}}/cerrar
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_solicitante}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.estado: eq CERRADO
+}
+
+docs {
+  El cierre de conformidad lo puede dar el solicitante propio, Operador o
+  Supervisor (nunca Técnico).
+}

@@ -1,0 +1,19 @@
+meta {
+  name: 04 Obtener Requerimiento por Id
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/requerimientos/{{incidente_id}}
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_solicitante}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{incidente_id}}
+}

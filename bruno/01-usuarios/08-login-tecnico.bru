@@ -1,0 +1,24 @@
+meta {
+  name: 08 Login Técnico
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/usuarios/login
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  username: {{email_tecnico}}
+  password: {{password_seed}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:post-response {
+  bru.setEnvVar("token_tecnico", res.body.access_token);
+}

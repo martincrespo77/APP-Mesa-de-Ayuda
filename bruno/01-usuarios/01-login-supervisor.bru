@@ -1,0 +1,31 @@
+meta {
+  name: 01 Login Supervisor
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/usuarios/login
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  username: {{email_supervisor}}
+  password: {{password_seed}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.token_type: eq bearer
+}
+
+script:post-response {
+  bru.setEnvVar("token_supervisor", res.body.access_token);
+}
+
+docs {
+  Requiere haber corrido `uv run python -m scripts.seed_mongo` contra el
+  Mongo real (ver docker-compose.yml). Guarda el token en `token_supervisor`
+  para las requests siguientes de esta carpeta.
+}

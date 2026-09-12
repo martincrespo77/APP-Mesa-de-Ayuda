@@ -1,0 +1,26 @@
+meta {
+  name: 04 Cambiar Rol
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{base_url}}/usuarios/{{usuario_creado_id}}/rol
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_supervisor}}
+}
+
+body:json {
+  {
+    "nuevo_rol": "OPERADOR"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.rol: eq OPERADOR
+}

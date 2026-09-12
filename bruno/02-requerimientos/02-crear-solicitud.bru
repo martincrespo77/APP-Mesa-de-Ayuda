@@ -1,0 +1,36 @@
+meta {
+  name: 02 Crear Solicitud
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/requerimientos
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_solicitante}}
+}
+
+body:json {
+  {
+    "tipo": "SOLICITUD",
+    "titulo": "Alta de nuevo servicio (Bruno)",
+    "descripcion": "Cliente nuevo solicita instalación.",
+    "categoria": "NUEVO_SERVICIO",
+    "fecha_limite": "2030-01-01T00:00:00Z",
+    "impacto_estimado": "Bajo"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.tipo: eq SOLICITUD
+  res.body.estado: eq ABIERTO
+}
+
+script:post-response {
+  bru.setEnvVar("solicitud_id", res.body.id);
+}

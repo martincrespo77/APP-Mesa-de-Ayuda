@@ -1,0 +1,24 @@
+meta {
+  name: 07 Login Operador
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/usuarios/login
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  username: {{email_operador}}
+  password: {{password_seed}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:post-response {
+  bru.setEnvVar("token_operador", res.body.access_token);
+}

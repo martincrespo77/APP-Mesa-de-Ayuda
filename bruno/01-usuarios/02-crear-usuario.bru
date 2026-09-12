@@ -1,0 +1,38 @@
+meta {
+  name: 02 Crear Usuario (solo Supervisor)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/usuarios
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_supervisor}}
+}
+
+body:json {
+  {
+    "nombre_completo": "Usuario de Prueba Bruno",
+    "email": "bruno.test@comunicarlos.coop",
+    "password": "clave-bruno-123",
+    "rol": "SOLICITANTE"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.rol: eq SOLICITANTE
+  res.body.activo: eq true
+}
+
+script:post-response {
+  bru.setEnvVar("usuario_creado_id", res.body.id);
+}
+
+docs {
+  Matriz de roles (doc02): administrar usuarios es exclusivo de SUPERVISOR.
+}

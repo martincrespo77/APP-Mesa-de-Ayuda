@@ -1,0 +1,25 @@
+meta {
+  name: 03 Listar Usuarios (solo Supervisor)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/usuarios
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_supervisor}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:post-response {
+  const creado = res.body.find((u) => u.id === bru.getEnvVar("usuario_creado_id"));
+  if (!creado) {
+    throw new Error("El usuario recién creado no aparece en el listado.");
+  }
+}

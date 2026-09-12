@@ -1,0 +1,19 @@
+meta {
+  name: 05 Desactivar Usuario
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{base_url}}/usuarios/{{usuario_creado_id}}/desactivar
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_supervisor}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.activo: eq false
+}

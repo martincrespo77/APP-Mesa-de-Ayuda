@@ -1,0 +1,29 @@
+meta {
+  name: 03 Listar Requerimientos (visibilidad propia)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/requerimientos
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_solicitante}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:post-response {
+  const ids = res.body.map((r) => r.id);
+  if (!ids.includes(bru.getEnvVar("incidente_id")) || !ids.includes(bru.getEnvVar("solicitud_id"))) {
+    throw new Error("El solicitante no ve sus propios requerimientos recién creados.");
+  }
+}
+
+docs {
+  Matriz de roles (doc02): un SOLICITANTE solo ve sus propios requerimientos.
+}
