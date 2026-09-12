@@ -29,6 +29,10 @@ El proyecto está organizado en tres capas independientes que se comunican
 │   ├── api_client.py     ClienteApi (ABC): ApiClienteHttp / ApiClienteDemo
 │   ├── models.py         DTOs propios del cliente (no reusa el dominio de app/)
 │   └── main.py           Punto de entrada del cliente
+├── web/                  Portal web (HTML/CSS/JS puro), montado como estáticos en app/main.py
+│   ├── index.html        Login (JWT en localStorage)
+│   ├── app.html          Portal: alta de ticket, listado y detalle
+│   └── js/, css/         fetch a la API, sin frameworks ni build step
 ├── scripts/
 │   └── seed_mongo.py     Script de siembra de datos de ejemplo en MongoDB
 ├── tests/                131 tests (pytest)
@@ -57,11 +61,21 @@ implementaciones intercambiables:
 - `ApiClienteDemo`: dataset sintético en memoria, sin red ni backend
   (usado por el **Modo Demostración**, ver más abajo).
 
+El portal web (`web/`) es igual de independiente: JavaScript puro que
+consume la API vía `fetch`, servido como archivos estáticos por la misma
+instancia de FastAPI (`app.mount("/", StaticFiles(...))` en `app/main.py`,
+montado después de los routers de API para que estos resuelvan primero). Al
+ser mismo origen que la API no necesita configurar CORS, y es accesible
+desde el celular en la misma red sin nada adicional (ver
+[Portal web](#portal-web-navegadorcelular) más abajo).
+
 ### Stack tecnológico
 
 - **Backend**: Python 3.12, FastAPI, Pydantic v2, PyMongo, python-jose (JWT),
   bcrypt.
 - **Cliente de escritorio**: PyQt6, httpx.
+- **Portal web**: HTML5 + CSS + JavaScript vanilla (`fetch`), sin frameworks
+  ni paso de build — servido como estáticos por la propia API.
 - **Persistencia**: MongoDB 7.
 - **Gestión de dependencias**: [uv](https://docs.astral.sh/uv/).
 - **Testing**: pytest, mongomock (para tests de infraestructura sin Mongo real).
@@ -196,6 +210,54 @@ memoria, ideal para mostrar la UI sin depender de infraestructura:
 ```bash
 uv run python -m desktop.main --demo
 ```
+
+## Portal web (navegador/celular)
+
+Alternativa liviana al cliente de escritorio para que un **Solicitante**
+cargue un Incidente/Solicitud y consulte el estado de sus tickets desde
+cualquier navegador, sin instalar nada — pensado también para acceder desde
+el celular. No expone las acciones de gestión de Operador/Técnico/
+Supervisor (asignar técnico, iniciar análisis, resolver, etc.): esas quedan
+reservadas al cliente de escritorio, siguiendo la matriz de roles del
+backend.
+
+Con la API corriendo (Docker o local, ver más arriba), abrir en el
+navegador:
+
+```
+http://localhost:8000
+```
+
+Desde el celular (misma red Wi-Fi que la máquina donde corre la API),
+reemplazar `localhost` por la IP de esa máquina en la red local, por
+ejemplo:
+
+```
+http://192.168.0.10:8000
+```
+
+(la IP se puede obtener con `ipconfig` en Windows, buscando el adaptador de
+red activo).
+
+Credenciales de prueba (requiere haber corrido el
+[seed](#poblar-la-base-de-datos-seed)):
+
+| Email                           | Contraseña   | Rol         |
+|----------------------------------|--------------|-------------|
+| `lucia.gomez@comunicarlos.coop`  | `Seed1234!`  | Solicitante |
+| `marcos.diaz@comunicarlos.coop`  | `Seed1234!`  | Solicitante |
+
+Funcionalidad disponible:
+
+- **Login**: guarda el JWT en `localStorage` del navegador; se limpia solo
+  ante un token vencido o un 401 de la API.
+- **Nuevo requerimiento**: formulario reactivo que alterna los campos según
+  el tipo elegido (Incidente o Solicitud).
+- **Mis requerimientos**: listado de los propios tickets con su estado, y
+  un detalle con el historial de auditoría completo. Desde el detalle, el
+  Solicitante puede **cancelar** un ticket propio mientras está `ABIERTO`
+  o **confirmar el cierre** de uno `RESUELTO` — las únicas dos transiciones
+  que el dominio le permite ejecutar a ese rol.
 
 ## Tests
 
