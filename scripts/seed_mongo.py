@@ -42,11 +42,11 @@ def _crear_usuarios() -> dict[str, Usuario]:
     """Un usuario por cada uno de los 4 roles, más un segundo solicitante."""
     password_hash = obtener_password_hash(_PASSWORD_SEED)
     datos = (
-        ("solicitante1", "Lucía Gómez", "lucia.gomez@comunicarlos.coop", RolUsuario.SOLICITANTE),
-        ("solicitante2", "Marcos Díaz", "marcos.diaz@comunicarlos.coop", RolUsuario.SOLICITANTE),
-        ("operador1", "Rosa Molina", "rosa.molina@comunicarlos.coop", RolUsuario.OPERADOR),
-        ("tecnico1", "Iván Ríos", "ivan.rios@comunicarlos.coop", RolUsuario.TECNICO),
-        ("supervisor1", "Sofía Jefa", "sofia.jefa@comunicarlos.coop", RolUsuario.SUPERVISOR),
+        ("solicitante1", "Lucía Gómez", "lucia.gomez@comunicarlos.com", RolUsuario.SOLICITANTE),
+        ("solicitante2", "Marcos Díaz", "marcos.diaz@comunicarlos.com", RolUsuario.SOLICITANTE),
+        ("operador1", "Rosa Molina", "rosa.molina@comunicarlos.com.ar", RolUsuario.OPERADOR),
+        ("tecnico1", "Iván Ríos", "ivan.rios@comunicarlos.com.ar", RolUsuario.TECNICO),
+        ("supervisor1", "Sofía Jefa", "sofia.jefa@comunicarlos.com.ar", RolUsuario.SUPERVISOR),
     )
     return {
         clave: Usuario(

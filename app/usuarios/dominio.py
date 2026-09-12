@@ -12,9 +12,18 @@ import re
 import uuid
 
 from app.compartido.dominio import RolUsuario
-from app.usuarios.excepciones import UsuarioYaActivoError, UsuarioYaInactivoError
+from app.usuarios.excepciones import (
+    EmailCorporativoRequeridoError,
+    UsuarioYaActivoError,
+    UsuarioYaInactivoError,
+)
 
 _PATRON_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+_DOMINIO_CORPORATIVO = "comunicarlos.com.ar"
+_ROLES_CON_EMAIL_CORPORATIVO = frozenset(
+    {RolUsuario.OPERADOR, RolUsuario.TECNICO, RolUsuario.SUPERVISOR}
+)
 
 
 class Usuario:
@@ -31,9 +40,9 @@ class Usuario:
     ) -> None:
         self.id = id or uuid.uuid4()
         self.nombre_completo = self._validar_nombre_completo(nombre_completo)
-        self.email = self._validar_email(email)
-        self._password_hash = self._validar_password_hash(password_hash)
         self._rol = self._validar_rol(rol)
+        self.email = self._validar_email(email, self._rol)
+        self._password_hash = self._validar_password_hash(password_hash)
         self._activo = activo
 
     @property
@@ -61,8 +70,15 @@ class Usuario:
         self._activo = False
 
     def cambiar_rol(self, nuevo_rol: RolUsuario) -> None:
-        """Reasigna el rol de negocio del usuario."""
-        self._rol = self._validar_rol(nuevo_rol)
+        """Reasigna el rol de negocio del usuario.
+
+        Si el nuevo rol es Operador/Técnico/Supervisor, exige que el email
+        ya registrado cumpla el dominio corporativo (no se puede ascender a
+        un rol operativo con un email personal).
+        """
+        nuevo_rol_validado = self._validar_rol(nuevo_rol)
+        self._validar_dominio_corporativo(self.email, nuevo_rol_validado)
+        self._rol = nuevo_rol_validado
 
     def cambiar_password_hash(self, nuevo_password_hash: str) -> None:
         """Reemplaza el hash de contraseña por uno nuevo ya calculado en infraestructura."""
@@ -78,13 +94,29 @@ class Usuario:
         return nombre_normalizado
 
     @staticmethod
-    def _validar_email(email: str) -> str:
+    def _validar_email(email: str, rol: RolUsuario) -> str:
         if not isinstance(email, str):
             raise TypeError("El email debe ser una cadena de texto.")
         email_normalizado = email.strip().lower()
         if not _PATRON_EMAIL.match(email_normalizado):
             raise ValueError(f"El email '{email}' no tiene un formato válido.")
+        Usuario._validar_dominio_corporativo(email_normalizado, rol)
         return email_normalizado
+
+    @staticmethod
+    def _validar_dominio_corporativo(email_normalizado: str, rol: RolUsuario) -> None:
+        """Operador, Técnico y Supervisor requieren email `@comunicarlos.com.ar`.
+
+        El Solicitante puede usar cualquier email (regla de negocio: "Los
+        solicitantes utilizarán cualquier correo electrónico").
+        """
+        if rol not in _ROLES_CON_EMAIL_CORPORATIVO:
+            return
+        if not email_normalizado.endswith(f"@{_DOMINIO_CORPORATIVO}"):
+            raise EmailCorporativoRequeridoError(
+                f"El rol '{rol}' requiere un email corporativo "
+                f"'@{_DOMINIO_CORPORATIVO}' (recibido: '{email_normalizado}')."
+            )
 
     @staticmethod
     def _validar_password_hash(password_hash: str) -> str:

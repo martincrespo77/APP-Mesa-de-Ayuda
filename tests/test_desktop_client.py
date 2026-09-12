@@ -25,7 +25,7 @@ from desktop.api_client import (
 )
 from desktop.models import CategoriaSolicitud, EstadoRequerimiento, RolUsuario, Severidad
 
-_EMAIL_VALIDO = "sol@comunicarlos.coop"
+_EMAIL_VALIDO = "sol@comunicarlos.com"
 _PASSWORD_VALIDA = "clave-segura-1"
 _USUARIO_ID = uuid.uuid4()
 

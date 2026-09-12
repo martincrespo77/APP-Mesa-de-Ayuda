@@ -175,11 +175,16 @@ Usuarios de ejemplo creados (contraseña `Seed1234!` para todos):
 
 | Email                              | Rol         |
 |------------------------------------|-------------|
-| `sofia.jefa@comunicarlos.coop`     | Supervisor  |
-| `rosa.molina@comunicarlos.coop`    | Operador    |
-| `ivan.rios@comunicarlos.coop`      | Técnico     |
-| `lucia.gomez@comunicarlos.coop`    | Solicitante |
-| `marcos.diaz@comunicarlos.coop`    | Solicitante |
+| `sofia.jefa@comunicarlos.com.ar`  | Supervisor  |
+| `rosa.molina@comunicarlos.com.ar` | Operador    |
+| `ivan.rios@comunicarlos.com.ar`   | Técnico     |
+| `lucia.gomez@comunicarlos.com`    | Solicitante |
+| `marcos.diaz@comunicarlos.com`    | Solicitante |
+
+Regla de negocio validada en el dominio (`Usuario`): Operador, Técnico y
+Supervisor exigen un email `@comunicarlos.com.ar`; el Solicitante puede
+usar cualquier email. Intentar crear o ascender a un rol operativo con un
+email fuera de ese dominio lanza `EmailCorporativoRequeridoError` (400).
 
 ## Cliente de escritorio (PyQt6)
 
@@ -244,8 +249,8 @@ Credenciales de prueba (requiere haber corrido el
 
 | Email                           | Contraseña   | Rol         |
 |----------------------------------|--------------|-------------|
-| `lucia.gomez@comunicarlos.coop`  | `Seed1234!`  | Solicitante |
-| `marcos.diaz@comunicarlos.coop`  | `Seed1234!`  | Solicitante |
+| `lucia.gomez@comunicarlos.com`  | `Seed1234!`  | Solicitante |
+| `marcos.diaz@comunicarlos.com`  | `Seed1234!`  | Solicitante |
 
 Funcionalidad disponible:
 

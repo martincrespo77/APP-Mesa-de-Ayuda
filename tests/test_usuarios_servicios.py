@@ -5,7 +5,11 @@ import uuid
 import pytest
 
 from app.compartido.dominio import RolUsuario
-from app.usuarios.excepciones import EmailYaRegistradoError, UsuarioNoEncontradoError
+from app.usuarios.excepciones import (
+    EmailCorporativoRequeridoError,
+    EmailYaRegistradoError,
+    UsuarioNoEncontradoError,
+)
 from app.usuarios.servicios import ServicioUsuarios
 from tests.fakes import FakeRepositorioUsuarios
 
@@ -26,7 +30,7 @@ class TestRegistrar:
     ) -> None:
         # Act
         usuario = servicio.registrar(
-            "Ana Pérez", "ana@comunicarlos.coop", "hash", RolUsuario.OPERADOR
+            "Ana Pérez", "ana@comunicarlos.com.ar", "hash", RolUsuario.OPERADOR
         )
 
         # Assert
@@ -34,13 +38,29 @@ class TestRegistrar:
 
     def test_registrar_con_email_duplicado_lanza_error(self, servicio: ServicioUsuarios) -> None:
         # Arrange
-        servicio.registrar("Ana Pérez", "ana@comunicarlos.coop", "hash", RolUsuario.OPERADOR)
+        servicio.registrar("Ana Pérez", "ana@comunicarlos.com.ar", "hash", RolUsuario.OPERADOR)
 
         # Act & Assert
         with pytest.raises(EmailYaRegistradoError):
             servicio.registrar(
-                "Ana Duplicada", "ana@comunicarlos.coop", "hash2", RolUsuario.TECNICO
+                "Ana Duplicada", "ana@comunicarlos.com.ar", "hash2", RolUsuario.TECNICO
             )
+
+    def test_registrar_operador_con_email_no_corporativo_lanza_error(
+        self, servicio: ServicioUsuarios
+    ) -> None:
+        # Act & Assert
+        with pytest.raises(EmailCorporativoRequeridoError):
+            servicio.registrar("Ana Pérez", "ana@gmail.com", "hash", RolUsuario.OPERADOR)
+
+    def test_registrar_solicitante_con_cualquier_email_no_lanza_error(
+        self, servicio: ServicioUsuarios
+    ) -> None:
+        # Act
+        usuario = servicio.registrar("Ana Pérez", "ana@gmail.com", "hash", RolUsuario.SOLICITANTE)
+
+        # Assert
+        assert usuario.email == "ana@gmail.com"
 
 
 class TestConsultas:
@@ -55,8 +75,8 @@ class TestConsultas:
         self, servicio: ServicioUsuarios
     ) -> None:
         # Arrange
-        servicio.registrar("Ana", "ana@comunicarlos.coop", "hash", RolUsuario.OPERADOR)
-        servicio.registrar("Beto", "beto@comunicarlos.coop", "hash", RolUsuario.TECNICO)
+        servicio.registrar("Ana", "ana@comunicarlos.com.ar", "hash", RolUsuario.OPERADOR)
+        servicio.registrar("Beto", "beto@comunicarlos.com.ar", "hash", RolUsuario.TECNICO)
 
         # Act
         usuarios = servicio.listar_todos()
@@ -70,7 +90,7 @@ class TestAdministracion:
         self, servicio: ServicioUsuarios, repositorio: FakeRepositorioUsuarios
     ) -> None:
         # Arrange
-        usuario = servicio.registrar("Ana", "ana@comunicarlos.coop", "hash", RolUsuario.OPERADOR)
+        usuario = servicio.registrar("Ana", "ana@comunicarlos.com.ar", "hash", RolUsuario.OPERADOR)
 
         # Act
         servicio.desactivar(usuario.id)
@@ -87,7 +107,7 @@ class TestAdministracion:
         self, servicio: ServicioUsuarios, repositorio: FakeRepositorioUsuarios
     ) -> None:
         # Arrange
-        usuario = servicio.registrar("Ana", "ana@comunicarlos.coop", "hash", RolUsuario.OPERADOR)
+        usuario = servicio.registrar("Ana", "ana@comunicarlos.com.ar", "hash", RolUsuario.OPERADOR)
 
         # Act
         servicio.cambiar_rol(usuario.id, RolUsuario.SUPERVISOR)

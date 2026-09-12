@@ -150,10 +150,10 @@ class TestListarYObtener:
         # Arrange
         _crear_usuario(repo_usuarios, "sol1@x.com", RolUsuario.SOLICITANTE)
         _crear_usuario(repo_usuarios, "sol2@x.com", RolUsuario.SOLICITANTE)
-        _crear_usuario(repo_usuarios, "op@x.com", RolUsuario.OPERADOR)
+        _crear_usuario(repo_usuarios, "op@comunicarlos.com.ar", RolUsuario.OPERADOR)
         token_1 = _token_de(cliente, "sol1@x.com")
         token_2 = _token_de(cliente, "sol2@x.com")
-        token_operador = _token_de(cliente, "op@x.com")
+        token_operador = _token_de(cliente, "op@comunicarlos.com.ar")
         cliente.post("/requerimientos", json=_BODY_INCIDENTE, headers=_headers(token_1))
         cliente.post("/requerimientos", json=_BODY_INCIDENTE, headers=_headers(token_2))
 
@@ -184,11 +184,11 @@ class TestTransicionesViaHttp:
     ) -> None:
         # Arrange
         solicitante = _crear_usuario(repo_usuarios, "sol@x.com", RolUsuario.SOLICITANTE)
-        tecnico = _crear_usuario(repo_usuarios, "tec@x.com", RolUsuario.TECNICO)
-        _crear_usuario(repo_usuarios, "op@x.com", RolUsuario.OPERADOR)
+        tecnico = _crear_usuario(repo_usuarios, "tec@comunicarlos.com.ar", RolUsuario.TECNICO)
+        _crear_usuario(repo_usuarios, "op@comunicarlos.com.ar", RolUsuario.OPERADOR)
         token_solicitante = _token_de(cliente, solicitante.email)
         token_tecnico = _token_de(cliente, tecnico.email)
-        token_operador = _token_de(cliente, "op@x.com")
+        token_operador = _token_de(cliente, "op@comunicarlos.com.ar")
 
         creado = cliente.post(
             "/requerimientos", json=_BODY_INCIDENTE, headers=_headers(token_solicitante)
@@ -245,9 +245,9 @@ class TestTransicionesViaHttp:
     ) -> None:
         # Arrange
         _crear_usuario(repo_usuarios, "sol@x.com", RolUsuario.SOLICITANTE)
-        _crear_usuario(repo_usuarios, "op@x.com", RolUsuario.OPERADOR)
+        _crear_usuario(repo_usuarios, "op@comunicarlos.com.ar", RolUsuario.OPERADOR)
         token_solicitante = _token_de(cliente, "sol@x.com")
-        token_operador = _token_de(cliente, "op@x.com")
+        token_operador = _token_de(cliente, "op@comunicarlos.com.ar")
         creado = cliente.post(
             "/requerimientos", json=_BODY_INCIDENTE, headers=_headers(token_solicitante)
         )
@@ -270,8 +270,8 @@ class TestTransicionesViaHttp:
         self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
     ) -> None:
         # Arrange
-        _crear_usuario(repo_usuarios, "op@x.com", RolUsuario.OPERADOR)
-        token = _token_de(cliente, "op@x.com")
+        _crear_usuario(repo_usuarios, "op@comunicarlos.com.ar", RolUsuario.OPERADOR)
+        token = _token_de(cliente, "op@comunicarlos.com.ar")
 
         # Act
         respuesta = cliente.post(

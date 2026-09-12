@@ -21,3 +21,7 @@ class UsuarioNoEncontradoError(UsuarioError):
 
 class EmailYaRegistradoError(UsuarioError):
     """Lanzada al registrar un usuario con un email que ya está en uso."""
+
+
+class EmailCorporativoRequeridoError(UsuarioError):
+    """Lanzada cuando Operador, Técnico o Supervisor no usan el email corporativo."""

@@ -43,7 +43,7 @@ def cliente(repositorio: FakeRepositorioUsuarios) -> Generator[TestClient, None,
 def supervisor(repositorio: FakeRepositorioUsuarios) -> Usuario:
     supervisor = Usuario(
         "Sofía Jefa",
-        "sofia@comunicarlos.coop",
+        "sofia@comunicarlos.com.ar",
         obtener_password_hash(_PASSWORD_SUPERVISOR),
         RolUsuario.SUPERVISOR,
     )
@@ -55,7 +55,7 @@ def supervisor(repositorio: FakeRepositorioUsuarios) -> Usuario:
 def tecnico(repositorio: FakeRepositorioUsuarios) -> Usuario:
     tecnico = Usuario(
         "Beto Técnico",
-        "beto@comunicarlos.coop",
+        "beto@comunicarlos.com.ar",
         obtener_password_hash(_PASSWORD_TECNICO),
         RolUsuario.TECNICO,
     )
@@ -80,7 +80,7 @@ class TestLogin:
         # Act
         respuesta = cliente.post(
             "/usuarios/login",
-            data={"username": "sofia@comunicarlos.coop", "password": _PASSWORD_SUPERVISOR},
+            data={"username": "sofia@comunicarlos.com.ar", "password": _PASSWORD_SUPERVISOR},
         )
 
         # Assert
@@ -94,7 +94,7 @@ class TestLogin:
         # Act
         respuesta = cliente.post(
             "/usuarios/login",
-            data={"username": "sofia@comunicarlos.coop", "password": "incorrecta"},
+            data={"username": "sofia@comunicarlos.com.ar", "password": "incorrecta"},
         )
 
         # Assert
@@ -115,14 +115,14 @@ class TestPerfilPropio:
         self, cliente: TestClient, supervisor: Usuario
     ) -> None:
         # Arrange
-        token = _token_de(cliente, "sofia@comunicarlos.coop", _PASSWORD_SUPERVISOR)
+        token = _token_de(cliente, "sofia@comunicarlos.com.ar", _PASSWORD_SUPERVISOR)
 
         # Act
         respuesta = cliente.get("/usuarios/me", headers=_headers(token))
 
         # Assert
         assert respuesta.status_code == 200
-        assert respuesta.json()["email"] == "sofia@comunicarlos.coop"
+        assert respuesta.json()["email"] == "sofia@comunicarlos.com.ar"
         assert "password" not in respuesta.json()
 
     def test_sin_token_devuelve_401(self, cliente: TestClient) -> None:
@@ -138,14 +138,14 @@ class TestCrearUsuario:
         self, cliente: TestClient, supervisor: Usuario
     ) -> None:
         # Arrange
-        token = _token_de(cliente, "sofia@comunicarlos.coop", _PASSWORD_SUPERVISOR)
+        token = _token_de(cliente, "sofia@comunicarlos.com.ar", _PASSWORD_SUPERVISOR)
 
         # Act
         respuesta = cliente.post(
             "/usuarios",
             json={
                 "nombre_completo": "Nuevo Técnico",
-                "email": "nuevo@comunicarlos.coop",
+                "email": "nuevo@comunicarlos.com.ar",
                 "password": "clave12345",
                 "rol": "TECNICO",
             },
@@ -159,7 +159,7 @@ class TestCrearUsuario:
 
     def test_rol_no_supervisor_devuelve_403(self, cliente: TestClient, tecnico: Usuario) -> None:
         # Arrange
-        token = _token_de(cliente, "beto@comunicarlos.coop", _PASSWORD_TECNICO)
+        token = _token_de(cliente, "beto@comunicarlos.com.ar", _PASSWORD_TECNICO)
 
         # Act
         respuesta = cliente.post(
@@ -180,14 +180,14 @@ class TestCrearUsuario:
         self, cliente: TestClient, supervisor: Usuario, tecnico: Usuario
     ) -> None:
         # Arrange
-        token = _token_de(cliente, "sofia@comunicarlos.coop", _PASSWORD_SUPERVISOR)
+        token = _token_de(cliente, "sofia@comunicarlos.com.ar", _PASSWORD_SUPERVISOR)
 
         # Act: intenta reusar el email del técnico ya existente
         respuesta = cliente.post(
             "/usuarios",
             json={
                 "nombre_completo": "x",
-                "email": "beto@comunicarlos.coop",
+                "email": "beto@comunicarlos.com.ar",
                 "password": "clave12345",
                 "rol": "OPERADOR",
             },
@@ -197,13 +197,55 @@ class TestCrearUsuario:
         # Assert
         assert respuesta.status_code == 409
 
+    def test_operador_con_email_no_corporativo_devuelve_400(
+        self, cliente: TestClient, supervisor: Usuario
+    ) -> None:
+        # Arrange
+        token = _token_de(cliente, "sofia@comunicarlos.com.ar", _PASSWORD_SUPERVISOR)
+
+        # Act: Operador/Técnico/Supervisor requieren "@comunicarlos.com.ar"
+        respuesta = cliente.post(
+            "/usuarios",
+            json={
+                "nombre_completo": "x",
+                "email": "nuevo@gmail.com",
+                "password": "clave12345",
+                "rol": "OPERADOR",
+            },
+            headers=_headers(token),
+        )
+
+        # Assert
+        assert respuesta.status_code == 400
+
+    def test_solicitante_con_email_no_corporativo_se_crea_sin_error(
+        self, cliente: TestClient, supervisor: Usuario
+    ) -> None:
+        # Arrange
+        token = _token_de(cliente, "sofia@comunicarlos.com.ar", _PASSWORD_SUPERVISOR)
+
+        # Act: el Solicitante no está sujeto a la restricción de dominio corporativo
+        respuesta = cliente.post(
+            "/usuarios",
+            json={
+                "nombre_completo": "x",
+                "email": "nuevo@gmail.com",
+                "password": "clave12345",
+                "rol": "SOLICITANTE",
+            },
+            headers=_headers(token),
+        )
+
+        # Assert
+        assert respuesta.status_code == 201
+
 
 class TestAdministracionDeUsuarios:
     def test_desactivar_usuario_via_endpoint(
         self, cliente: TestClient, supervisor: Usuario, tecnico: Usuario
     ) -> None:
         # Arrange
-        token = _token_de(cliente, "sofia@comunicarlos.coop", _PASSWORD_SUPERVISOR)
+        token = _token_de(cliente, "sofia@comunicarlos.com.ar", _PASSWORD_SUPERVISOR)
 
         # Act
         respuesta = cliente.patch(f"/usuarios/{tecnico.id}/desactivar", headers=_headers(token))
@@ -216,7 +258,7 @@ class TestAdministracionDeUsuarios:
         self, cliente: TestClient, supervisor: Usuario
     ) -> None:
         # Arrange
-        token = _token_de(cliente, "sofia@comunicarlos.coop", _PASSWORD_SUPERVISOR)
+        token = _token_de(cliente, "sofia@comunicarlos.com.ar", _PASSWORD_SUPERVISOR)
 
         # Act
         respuesta = cliente.patch(f"/usuarios/{uuid.uuid4()}/desactivar", headers=_headers(token))
@@ -228,7 +270,7 @@ class TestAdministracionDeUsuarios:
         self, cliente: TestClient, supervisor: Usuario, tecnico: Usuario
     ) -> None:
         # Arrange
-        token = _token_de(cliente, "sofia@comunicarlos.coop", _PASSWORD_SUPERVISOR)
+        token = _token_de(cliente, "sofia@comunicarlos.com.ar", _PASSWORD_SUPERVISOR)
 
         # Act
         respuesta = cliente.get("/usuarios", headers=_headers(token))
@@ -241,7 +283,7 @@ class TestAdministracionDeUsuarios:
         self, cliente: TestClient, supervisor: Usuario, tecnico: Usuario
     ) -> None:
         # Arrange
-        token = _token_de(cliente, "sofia@comunicarlos.coop", _PASSWORD_SUPERVISOR)
+        token = _token_de(cliente, "sofia@comunicarlos.com.ar", _PASSWORD_SUPERVISOR)
 
         # Act
         respuesta = cliente.patch(

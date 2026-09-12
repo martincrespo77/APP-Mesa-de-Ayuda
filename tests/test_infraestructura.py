@@ -49,7 +49,7 @@ def repo_requerimientos(db: Database[dict[str, Any]]) -> RepositorioRequerimient
 def usuario() -> Usuario:
     return Usuario(
         nombre_completo="Ana Pérez",
-        email="ana.perez@comunicarlos.coop",
+        email="ana.perez@comunicarlos.com.ar",
         password_hash="hash-bcrypt-de-prueba",
         rol=RolUsuario.OPERADOR,
     )
@@ -95,7 +95,7 @@ class TestRepositorioUsuariosMongoGuardarYBuscar:
         self, repo_usuarios: RepositorioUsuariosMongo
     ) -> None:
         # Act & Assert
-        assert repo_usuarios.buscar_por_email("no-existe@comunicarlos.coop") is None
+        assert repo_usuarios.buscar_por_email("no-existe@comunicarlos.com") is None
 
     def test_guardar_es_upsert_no_duplica_documentos(
         self, repo_usuarios: RepositorioUsuariosMongo, usuario: Usuario
@@ -119,13 +119,13 @@ class TestRepositorioUsuariosMongoGuardarYBuscar:
         # Arrange
         usuario_a = Usuario(
             nombre_completo="A",
-            email="a@comunicarlos.coop",
+            email="a@comunicarlos.com",
             password_hash="hash-a",
             rol=RolUsuario.SOLICITANTE,
         )
         usuario_b = Usuario(
             nombre_completo="B",
-            email="b@comunicarlos.coop",
+            email="b@comunicarlos.com.ar",
             password_hash="hash-b",
             rol=RolUsuario.TECNICO,
         )
