@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mesa de Ayuda — Comunicarlos</title>
+    <link rel="stylesheet" href="css/estilos.css" />
+</head>
+<body>
+    <div class="contenedor contenedor-ancho">
+        <header class="encabezado">
+            <div>
+                <h1 style="margin-bottom: 2px;">Mesa de Ayuda</h1>
+                <p class="subtitulo" style="margin: 0;">Cooperativa Comunicarlos</p>
+            </div>
+            <div class="usuario-actual">
+                <div id="usuario-nombre">Cargando…</div>
+                <div id="usuario-rol"></div>
+                <button class="secundario" id="boton-salir" style="margin-top: 6px; padding: 4px 12px; font-size: 12px;">
+                    Cerrar sesión
+                </button>
+            </div>
+        </header>
+
+        <nav class="pestanas">
+            <button class="pestana activa" data-pestana="nuevo">Nuevo requerimiento</button>
+            <button class="pestana" data-pestana="listado">Mis requerimientos</button>
+        </nav>
+
+        <!-- Pestaña: Nuevo requerimiento -->
+        <section id="pestana-nuevo">
+            <div class="tarjeta">
+                <h2>Nuevo requerimiento</h2>
+                <form id="form-nuevo">
+                    <label for="tipo">Tipo</label>
+                    <select id="tipo" name="tipo">
+                        <option value="INCIDENTE">Incidente (corte o falla de un servicio)</option>
+                        <option value="SOLICITUD">Solicitud (pedido planificado / consulta)</option>
+                    </select>
+
+                    <label for="titulo">Título</label>
+                    <input type="text" id="titulo" required />
+
+                    <label for="descripcion">Descripción</label>
+                    <textarea id="descripcion" required></textarea>
+
+                    <!-- Campos específicos de Incidente -->
+                    <div id="campos-incidente">
+                        <div class="fila">
+                            <div>
+                                <label for="severidad">Severidad</label>
+                                <select id="severidad">
+                                    <option value="BAJA">Baja</option>
+                                    <option value="MEDIA">Media</option>
+                                    <option value="ALTA">Alta</option>
+                                    <option value="CRITICA">Crítica</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="servicio_afectado">Servicio afectado</label>
+                                <input type="text" id="servicio_afectado" placeholder="Fibra, telefonía IP, TV…" />
+                            </div>
+                        </div>
+
+                        <label for="pasos_reproduccion">Pasos para reproducir el problema</label>
+                        <textarea id="pasos_reproduccion"></textarea>
+                    </div>
+
+                    <!-- Campos específicos de Solicitud -->
+                    <div id="campos-solicitud" hidden>
+                        <div class="fila">
+                            <div>
+                                <label for="categoria">Categoría</label>
+                                <select id="categoria">
+                                    <option value="NUEVO_SERVICIO">Nuevo servicio</option>
+                                    <option value="CAMBIO_ABONO">Cambio de abono</option>
+                                    <option value="CONSULTA_ADMINISTRATIVA">Consulta administrativa</option>
+                                    <option value="FACTURACION">Facturación</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="fecha_limite">Fecha límite deseada</label>
+                                <input type="datetime-local" id="fecha_limite" />
+                            </div>
+                        </div>
+
+                        <label for="impacto_estimado">Impacto estimado</label>
+                        <textarea id="impacto_estimado"></textarea>
+                    </div>
+
+                    <button type="submit" style="margin-top: 20px;">Crear requerimiento</button>
+                    <p class="error" id="error-nuevo" hidden></p>
+                    <p class="exito" id="exito-nuevo" hidden></p>
+                </form>
+            </div>
+        </section>
+
+        <!-- Pestaña: Listado -->
+        <section id="pestana-listado" hidden>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                <h2 style="margin: 0;">Mis requerimientos</h2>
+                <button class="secundario" id="boton-refrescar">Refrescar</button>
+            </div>
+            <p class="error" id="error-listado" hidden></p>
+            <div class="lista-tickets" id="lista-tickets"></div>
+        </section>
+    </div>
+
+    <!-- Modal de detalle -->
+    <div class="superposicion" id="modal-detalle" hidden>
+        <div class="tarjeta">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <h2 id="detalle-titulo" style="margin: 0;"></h2>
+                <button class="secundario" id="boton-cerrar-modal" style="padding: 4px 12px;">✕</button>
+            </div>
+            <div id="detalle-cuerpo"></div>
+            <h2 style="margin-top: 20px;">Historial</h2>
+            <div id="detalle-historial"></div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
