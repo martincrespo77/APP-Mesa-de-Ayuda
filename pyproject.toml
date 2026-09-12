@@ -14,12 +14,12 @@ dependencies = [
     "pymongo>=4.7",
     "pyqt6>=6.6",
     "python-multipart>=0.0.32",
+    "httpx>=0.28",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
-    "httpx>=0.28",
     "mongomock>=4.1",
     "ruff>=0.16.6",
     "mypy>=2.3.1",
