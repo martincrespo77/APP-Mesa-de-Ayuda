@@ -12,7 +12,9 @@ from app.compartido.excepciones import DominioError
 from app.config import get_settings
 from app.errores import codigo_http_para
 from app.infraestructura.database import crear_cliente_mongo, crear_indices, obtener_base_datos
+from app.notificaciones.router import router as router_notificaciones
 from app.requerimientos.router import router as router_requerimientos
+from app.supervision.router import router as router_supervision
 from app.usuarios.router import router as router_usuarios
 
 # Sin esto, `ObservadorLogger` (Paso 3, app/notificaciones/observador_logger.py)
@@ -58,6 +60,8 @@ def verificar_salud() -> dict[str, str]:
 
 app.include_router(router_usuarios)
 app.include_router(router_requerimientos)
+app.include_router(router_supervision)
+app.include_router(router_notificaciones)
 
 # Montado al final y en la raíz ("/"): las rutas de API ya registradas arriba
 # siguen resolviendo primero (FastAPI matchea en orden de registro), así que

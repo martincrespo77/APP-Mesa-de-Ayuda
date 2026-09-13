@@ -13,8 +13,13 @@ from fastapi.testclient import TestClient
 
 from app.auth import obtener_password_hash
 from app.compartido.dominio import RolUsuario, ServicioComunicarlos
-from app.deps import obtener_repositorio_requerimientos, obtener_repositorio_usuarios
+from app.deps import (
+    obtener_despachador_eventos,
+    obtener_repositorio_requerimientos,
+    obtener_repositorio_usuarios,
+)
 from app.main import app
+from app.notificaciones.despachador import DespachadorEventos
 from app.usuarios.dominio import Usuario
 from tests.fakes import FakeRepositorioRequerimientos, FakeRepositorioUsuarios
 from tests.lifespan import lifespan_vacio
@@ -38,6 +43,10 @@ def cliente(
 ) -> Generator[TestClient, None, None]:
     app.dependency_overrides[obtener_repositorio_usuarios] = lambda: repo_usuarios
     app.dependency_overrides[obtener_repositorio_requerimientos] = lambda: repo_requerimientos
+    # El despachador real necesita `app.state.db` (Mongo) para el observer de
+    # notificaciones: se sobreescribe por uno sin observers, ya que estos
+    # tests no ejercitan supervisión/notificaciones (ver test_notificaciones_*).
+    app.dependency_overrides[obtener_despachador_eventos] = DespachadorEventos
     lifespan_original = app.router.lifespan_context
     app.router.lifespan_context = lifespan_vacio
     with TestClient(app) as cliente_de_prueba:

@@ -6,6 +6,7 @@ import uuid
 import pytest
 
 from app.notificaciones.despachador import DespachadorEventos
+from app.notificaciones.dominio import Notificacion
 from app.notificaciones.observador import ObservadorRequerimiento
 from app.notificaciones.observador_logger import ObservadorLogger
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
@@ -102,3 +103,50 @@ class TestObservadorLogger:
         # Assert
         assert str(evento.requerimiento_id) in caplog.text
         assert "CAMBIO_ESTADO" in caplog.text
+
+
+class TestNotificacion:
+    def test_nace_no_leida_con_id_y_timestamp_generados(self) -> None:
+        # Act
+        notificacion = Notificacion(
+            supervisor_id=uuid.uuid4(),
+            empleado_supervisado_id=uuid.uuid4(),
+            requerimiento_id=uuid.uuid4(),
+            tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
+            detalle="Cambió de estado.",
+        )
+
+        # Assert
+        assert notificacion.leida is False
+        assert isinstance(notificacion.id, uuid.UUID)
+
+    def test_marcar_leida(self) -> None:
+        # Arrange
+        notificacion = Notificacion(
+            supervisor_id=uuid.uuid4(),
+            empleado_supervisado_id=uuid.uuid4(),
+            requerimiento_id=uuid.uuid4(),
+            tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
+            detalle="Cambió de estado.",
+        )
+
+        # Act
+        notificacion.marcar_leida()
+
+        # Assert
+        assert notificacion.leida is True
+
+    def test_marcar_leida_es_idempotente(self) -> None:
+        # Arrange
+        notificacion = Notificacion(
+            supervisor_id=uuid.uuid4(),
+            empleado_supervisado_id=uuid.uuid4(),
+            requerimiento_id=uuid.uuid4(),
+            tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
+            detalle="Cambió de estado.",
+        )
+
+        # Act & Assert: llamar dos veces no lanza error
+        notificacion.marcar_leida()
+        notificacion.marcar_leida()
+        assert notificacion.leida is True

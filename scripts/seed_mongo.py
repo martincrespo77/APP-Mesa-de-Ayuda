@@ -22,10 +22,15 @@ from app.auth import obtener_password_hash
 from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.config import get_settings
 from app.infraestructura.database import crear_cliente_mongo, crear_indices, obtener_base_datos
+from app.infraestructura.repo_notificaciones import RepositorioNotificacionesMongo
 from app.infraestructura.repo_requerimientos import RepositorioRequerimientosMongo
+from app.infraestructura.repo_supervision import RepositorioSupervisionMongo
 from app.infraestructura.repo_usuarios import RepositorioUsuariosMongo
+from app.notificaciones.dominio import Notificacion
 from app.requerimientos.dominio.incidente import CategoriaIncidente, Incidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud, Solicitud
+from app.requerimientos.eventos import TipoEventoRequerimiento
+from app.supervision.dominio import RelacionSupervision
 from app.usuarios.dominio import Usuario
 
 _NAMESPACE_SEED = uuid.uuid5(uuid.NAMESPACE_DNS, "mesa-de-ayuda-comunicarlos.seed")
@@ -218,6 +223,36 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
     ]
 
 
+def _crear_supervisiones(usuarios: dict[str, Usuario]) -> list[RelacionSupervision]:
+    """El supervisor de ejemplo audita al operador y al técnico de ejemplo."""
+    supervisor_id = usuarios["supervisor1"].id
+    return [
+        RelacionSupervision(
+            id=_id("supervision-operador1"),
+            supervisor_id=supervisor_id,
+            supervisado_id=usuarios["operador1"].id,
+        ),
+        RelacionSupervision(
+            id=_id("supervision-tecnico1"),
+            supervisor_id=supervisor_id,
+            supervisado_id=usuarios["tecnico1"].id,
+        ),
+    ]
+
+
+def _crear_notificacion_ejemplo(usuarios: dict[str, Usuario]) -> Notificacion:
+    """Notificación de ejemplo: aviso al supervisor de que el operador inició
+    el análisis de `incidente-en-analisis` (ver `_crear_requerimientos`)."""
+    return Notificacion(
+        id=_id("notificacion-ejemplo"),
+        supervisor_id=usuarios["supervisor1"].id,
+        empleado_supervisado_id=usuarios["operador1"].id,
+        requerimiento_id=_id("incidente-en-analisis"),
+        tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
+        detalle="Estado cambiado de ABIERTO a EN_ANALISIS.",
+    )
+
+
 def main() -> None:
     settings = get_settings()
     cliente = crear_cliente_mongo(settings)
@@ -226,6 +261,8 @@ def main() -> None:
 
     repo_usuarios = RepositorioUsuariosMongo(db)
     repo_requerimientos = RepositorioRequerimientosMongo(db)
+    repo_supervision = RepositorioSupervisionMongo(db)
+    repo_notificaciones = RepositorioNotificacionesMongo(db)
 
     usuarios = _crear_usuarios()
     for usuario in usuarios.values():
@@ -236,6 +273,14 @@ def main() -> None:
     for requerimiento in requerimientos:
         repo_requerimientos.guardar(requerimiento)
     print(f"Requerimientos sembrados: {len(requerimientos)}")
+
+    supervisiones = _crear_supervisiones(usuarios)
+    for relacion in supervisiones:
+        repo_supervision.asignar(relacion)
+    print(f"Relaciones de supervisión sembradas: {len(supervisiones)}")
+
+    repo_notificaciones.guardar(_crear_notificacion_ejemplo(usuarios))
+    print("Notificación de ejemplo sembrada: 1")
 
     cliente.close()
 

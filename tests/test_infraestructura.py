@@ -17,12 +17,16 @@ import pytest
 from pymongo.database import Database
 
 from app.compartido.dominio import RolUsuario, ServicioComunicarlos
+from app.infraestructura.repo_notificaciones import RepositorioNotificacionesMongo
 from app.infraestructura.repo_requerimientos import RepositorioRequerimientosMongo
+from app.infraestructura.repo_supervision import RepositorioSupervisionMongo
 from app.infraestructura.repo_usuarios import RepositorioUsuariosMongo
+from app.notificaciones.dominio import Notificacion
 from app.requerimientos.dominio.estados import EstadoRequerimiento
 from app.requerimientos.dominio.incidente import CategoriaIncidente, Incidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud, Solicitud
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
+from app.supervision.dominio import RelacionSupervision
 from app.usuarios.dominio import Usuario
 
 
@@ -48,6 +52,16 @@ def repo_usuarios(db: Database[dict[str, Any]]) -> RepositorioUsuariosMongo:
 @pytest.fixture
 def repo_requerimientos(db: Database[dict[str, Any]]) -> RepositorioRequerimientosMongo:
     return RepositorioRequerimientosMongo(db)
+
+
+@pytest.fixture
+def repo_supervision(db: Database[dict[str, Any]]) -> RepositorioSupervisionMongo:
+    return RepositorioSupervisionMongo(db)
+
+
+@pytest.fixture
+def repo_notificaciones(db: Database[dict[str, Any]]) -> RepositorioNotificacionesMongo:
+    return RepositorioNotificacionesMongo(db)
 
 
 @pytest.fixture
@@ -387,3 +401,136 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
         assert evento_reconstruido.autor_id == evento_original.autor_id
         assert evento_reconstruido.detalle == evento_original.detalle
         assert isinstance(evento_reconstruido, EventoRequerimiento)
+
+
+class TestRepositorioSupervisionMongo:
+    def test_asignar_y_listar_supervisados_de(
+        self, repo_supervision: RepositorioSupervisionMongo
+    ) -> None:
+        # Arrange
+        supervisor_id = uuid.uuid4()
+        relacion = RelacionSupervision(supervisor_id=supervisor_id, supervisado_id=uuid.uuid4())
+
+        # Act
+        repo_supervision.asignar(relacion)
+        supervisados = repo_supervision.listar_supervisados_de(supervisor_id)
+
+        # Assert
+        assert [r.id for r in supervisados] == [relacion.id]
+
+    def test_listar_supervisores_de(self, repo_supervision: RepositorioSupervisionMongo) -> None:
+        # Arrange
+        supervisado_id = uuid.uuid4()
+        relacion = RelacionSupervision(supervisor_id=uuid.uuid4(), supervisado_id=supervisado_id)
+        repo_supervision.asignar(relacion)
+
+        # Act
+        supervisores = repo_supervision.listar_supervisores_de(supervisado_id)
+
+        # Assert
+        assert [r.id for r in supervisores] == [relacion.id]
+
+    def test_existe(self, repo_supervision: RepositorioSupervisionMongo) -> None:
+        # Arrange
+        supervisor_id, supervisado_id = uuid.uuid4(), uuid.uuid4()
+
+        # Act & Assert: todavía no existe
+        assert not repo_supervision.existe(supervisor_id, supervisado_id)
+
+        repo_supervision.asignar(
+            RelacionSupervision(supervisor_id=supervisor_id, supervisado_id=supervisado_id)
+        )
+        assert repo_supervision.existe(supervisor_id, supervisado_id)
+
+    def test_remover(self, repo_supervision: RepositorioSupervisionMongo) -> None:
+        # Arrange
+        supervisor_id, supervisado_id = uuid.uuid4(), uuid.uuid4()
+        repo_supervision.asignar(
+            RelacionSupervision(supervisor_id=supervisor_id, supervisado_id=supervisado_id)
+        )
+
+        # Act
+        repo_supervision.remover(supervisor_id, supervisado_id)
+
+        # Assert
+        assert not repo_supervision.existe(supervisor_id, supervisado_id)
+
+
+class TestRepositorioNotificacionesMongo:
+    def test_guardar_y_buscar_por_id(
+        self, repo_notificaciones: RepositorioNotificacionesMongo
+    ) -> None:
+        # Arrange
+        notificacion = Notificacion(
+            supervisor_id=uuid.uuid4(),
+            empleado_supervisado_id=uuid.uuid4(),
+            requerimiento_id=uuid.uuid4(),
+            tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
+            detalle="Cambió de estado.",
+        )
+
+        # Act
+        repo_notificaciones.guardar(notificacion)
+        encontrada = repo_notificaciones.buscar_por_id(notificacion.id)
+
+        # Assert
+        assert encontrada is not None
+        assert encontrada.supervisor_id == notificacion.supervisor_id
+        assert encontrada.tipo_evento == TipoEventoRequerimiento.CAMBIO_ESTADO
+        assert encontrada.leida is False
+
+    def test_guardar_persiste_marcar_leida(
+        self, repo_notificaciones: RepositorioNotificacionesMongo
+    ) -> None:
+        # Arrange
+        notificacion = Notificacion(
+            supervisor_id=uuid.uuid4(),
+            empleado_supervisado_id=uuid.uuid4(),
+            requerimiento_id=uuid.uuid4(),
+            tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
+            detalle="Cambió de estado.",
+        )
+        repo_notificaciones.guardar(notificacion)
+
+        # Act
+        notificacion.marcar_leida()
+        repo_notificaciones.guardar(notificacion)
+        encontrada = repo_notificaciones.buscar_por_id(notificacion.id)
+
+        # Assert
+        assert encontrada is not None
+        assert encontrada.leida is True
+
+    def test_listar_por_supervisor(
+        self, repo_notificaciones: RepositorioNotificacionesMongo
+    ) -> None:
+        # Arrange
+        supervisor_id = uuid.uuid4()
+        mia = Notificacion(
+            supervisor_id=supervisor_id,
+            empleado_supervisado_id=uuid.uuid4(),
+            requerimiento_id=uuid.uuid4(),
+            tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
+            detalle="Cambió de estado.",
+        )
+        ajena = Notificacion(
+            supervisor_id=uuid.uuid4(),
+            empleado_supervisado_id=uuid.uuid4(),
+            requerimiento_id=uuid.uuid4(),
+            tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
+            detalle="Cambió de estado.",
+        )
+        repo_notificaciones.guardar(mia)
+        repo_notificaciones.guardar(ajena)
+
+        # Act
+        resultado = repo_notificaciones.listar_por_supervisor(supervisor_id)
+
+        # Assert
+        assert [n.id for n in resultado] == [mia.id]
+
+    def test_buscar_por_id_inexistente_devuelve_none(
+        self, repo_notificaciones: RepositorioNotificacionesMongo
+    ) -> None:
+        # Act & Assert
+        assert repo_notificaciones.buscar_por_id(uuid.uuid4()) is None

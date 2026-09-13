@@ -9,6 +9,7 @@ cual y el `exception_handler` de `app/main.py` la traduce usando
 from fastapi import status
 
 from app.compartido.excepciones import DominioError
+from app.notificaciones.excepciones import NotificacionNoEncontradaError
 from app.requerimientos.excepciones import (
     NotaResolucionRequeridaError,
     PermisoDenegadoError,
@@ -16,6 +17,7 @@ from app.requerimientos.excepciones import (
     TecnicoNoAsignadoError,
     TransicionInvalidaError,
 )
+from app.supervision.excepciones import RelacionYaExisteError
 from app.usuarios.excepciones import (
     CredencialesInvalidasError,
     EmailYaRegistradoError,
@@ -35,6 +37,8 @@ _CODIGOS_HTTP: dict[type[DominioError], int] = {
     UsuarioYaActivoError: status.HTTP_409_CONFLICT,
     UsuarioYaInactivoError: status.HTTP_409_CONFLICT,
     CredencialesInvalidasError: status.HTTP_401_UNAUTHORIZED,
+    RelacionYaExisteError: status.HTTP_409_CONFLICT,
+    NotificacionNoEncontradaError: status.HTTP_404_NOT_FOUND,
 }
 
 

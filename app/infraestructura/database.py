@@ -21,6 +21,8 @@ from app.config import Settings
 
 COLECCION_USUARIOS = "usuarios"
 COLECCION_REQUERIMIENTOS = "requerimientos"
+COLECCION_SUPERVISIONES = "supervisiones"
+COLECCION_NOTIFICACIONES = "notificaciones"
 
 
 def crear_cliente_mongo(settings: Settings) -> MongoClient[dict[str, Any]]:
@@ -55,3 +57,6 @@ def crear_indices(db: Database[dict[str, Any]]) -> None:
     db[COLECCION_REQUERIMIENTOS].create_index("solicitante_id")
     db[COLECCION_REQUERIMIENTOS].create_index("estado")
     db[COLECCION_REQUERIMIENTOS].create_index("tipo")
+    db[COLECCION_SUPERVISIONES].create_index("supervisor_id")
+    db[COLECCION_SUPERVISIONES].create_index("supervisado_id")
+    db[COLECCION_NOTIFICACIONES].create_index("supervisor_id")

@@ -17,24 +17,24 @@ from pymongo.database import Database
 
 from app.auth import TokenInvalidoError, decodificar_token, verificar_password
 from app.compartido.dominio import RolUsuario
+from app.infraestructura.observador_notificaciones import ObservadorNotificacionesMongo
+from app.infraestructura.repo_notificaciones import RepositorioNotificacionesMongo
 from app.infraestructura.repo_requerimientos import RepositorioRequerimientosMongo
+from app.infraestructura.repo_supervision import RepositorioSupervisionMongo
 from app.infraestructura.repo_usuarios import RepositorioUsuariosMongo
 from app.notificaciones.despachador import DespachadorEventos
 from app.notificaciones.observador_logger import ObservadorLogger
+from app.notificaciones.repositorio import RepositorioNotificaciones
+from app.notificaciones.servicios import ServicioNotificaciones
 from app.requerimientos.repositorio import RepositorioRequerimientos
 from app.requerimientos.servicios import ServicioRequerimientos
+from app.supervision.repositorio import RepositorioSupervision
+from app.supervision.servicios import ServicioSupervision
 from app.usuarios.dominio import Usuario
 from app.usuarios.repositorio import RepositorioUsuarios
 from app.usuarios.servicios import ServicioUsuarios
 
 _esquema_oauth2 = OAuth2PasswordBearer(tokenUrl="/usuarios/login")
-
-# El despachador de eventos no persiste nada: puede vivir ya como singleton
-# de proceso, con el único observador de dominio (ObservadorLogger)
-# suscripto. Observadores con infraestructura externa se agregan en el
-# Paso 5 sin tocar esta función.
-_despachador_eventos = DespachadorEventos()
-_despachador_eventos.suscribir(ObservadorLogger())
 
 
 def _obtener_base_datos_mongo(request: Request) -> Database[dict[str, Any]]:
@@ -60,9 +60,42 @@ def obtener_repositorio_requerimientos(
     return RepositorioRequerimientosMongo(db)
 
 
-def obtener_despachador_eventos() -> DespachadorEventos:
-    """Provee el despachador de eventos (Observer) del proceso."""
-    return _despachador_eventos
+def obtener_repositorio_supervision(
+    db: Database[dict[str, Any]] = Depends(_obtener_base_datos_mongo),
+) -> RepositorioSupervision:
+    """Provee el repositorio concreto de supervisión (PyMongo)."""
+    return RepositorioSupervisionMongo(db)
+
+
+def obtener_repositorio_notificaciones(
+    db: Database[dict[str, Any]] = Depends(_obtener_base_datos_mongo),
+) -> RepositorioNotificaciones:
+    """Provee el repositorio concreto de notificaciones (PyMongo)."""
+    return RepositorioNotificacionesMongo(db)
+
+
+def obtener_despachador_eventos(
+    db: Database[dict[str, Any]] = Depends(_obtener_base_datos_mongo),
+) -> DespachadorEventos:
+    """Provee un `DespachadorEventos` nuevo por request, con ambos observers.
+
+    Antes era un singleton de proceso con el único observer sin estado
+    (`ObservadorLogger`); `ObservadorNotificacionesMongo` necesita el `db`
+    de la request actual para resolver supervisores vía
+    `RepositorioSupervision`, así que cada request arma su propio
+    despachador — barato: son listas y objetos livianos — en vez de
+    reusar uno global que nunca se vacía.
+    """
+    despachador = DespachadorEventos()
+    despachador.suscribir(ObservadorLogger())
+    despachador.suscribir(
+        ObservadorNotificacionesMongo(
+            RepositorioUsuariosMongo(db),
+            RepositorioSupervisionMongo(db),
+            RepositorioNotificacionesMongo(db),
+        )
+    )
+    return despachador
 
 
 def obtener_servicio_usuarios(
@@ -76,6 +109,19 @@ def obtener_servicio_requerimientos(
     despachador: DespachadorEventos = Depends(obtener_despachador_eventos),
 ) -> ServicioRequerimientos:
     return ServicioRequerimientos(repositorio, despachador)
+
+
+def obtener_servicio_supervision(
+    repositorio: RepositorioSupervision = Depends(obtener_repositorio_supervision),
+    repositorio_usuarios: RepositorioUsuarios = Depends(obtener_repositorio_usuarios),
+) -> ServicioSupervision:
+    return ServicioSupervision(repositorio, repositorio_usuarios)
+
+
+def obtener_servicio_notificaciones(
+    repositorio: RepositorioNotificaciones = Depends(obtener_repositorio_notificaciones),
+) -> ServicioNotificaciones:
+    return ServicioNotificaciones(repositorio)
 
 
 def obtener_usuario_actual(
