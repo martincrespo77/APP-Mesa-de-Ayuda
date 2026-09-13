@@ -19,11 +19,15 @@ O abrirla en la app de escritorio de Bruno (`bruno/` como carpeta de colección)
 Las carpetas están numeradas y cada request depende de las anteriores
 (tokens e ids se pasan entre requests vía variables de entorno de Bruno):
 
-- `01-usuarios/`: login de los 4 roles, alta/baja/cambio de rol de un
-  usuario (solo Supervisor, incluye `servicios_suscriptos` al crear un
-  Solicitante), un chequeo negativo (403 para un rol sin permiso), un
-  segundo login de Solicitante y los perfiles de Operador/Técnico (para
-  capturar sus ids, usados en `02-requerimientos/` y `03-supervision/`).
+- `01-usuarios/`: login de los 4 roles, alta/baja de un usuario (solo
+  Supervisor, incluye `servicios_suscriptos` al crear un Solicitante), un
+  chequeo negativo (403 para un rol sin permiso), un segundo login de
+  Solicitante y los perfiles de Operador/Técnico (para capturar sus ids,
+  usados en `02-requerimientos/` y `03-supervision/`). El cambio de rol se
+  cubre dos veces: "04" documenta que ascender a OPERADOR a un Solicitante
+  con suscripciones activas se rechaza (400, `SuscripcionRequeridaError`);
+  "14"/"15" crean un Operador sin suscripciones y sí lo cambian a Técnico
+  con éxito.
 - `02-requerimientos/`: crear Incidente (`urgencia`/`categoria`/`servicio`/
   `pasos_reproduccion`) y Solicitud (`categoria`/`servicio`), listar con
   visibilidad propia, el flujo completo de transiciones de un Incidente
