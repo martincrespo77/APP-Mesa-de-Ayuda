@@ -1,0 +1,27 @@
+meta {
+  name: 13 Obtener Mi Perfil (Operador)
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{base_url}}/usuarios/me
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_operador}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.rol: eq OPERADOR
+}
+
+script:post-response {
+  bru.setEnvVar("operador_id", res.body.id);
+}
+
+docs {
+  Guarda el id del operador para usarlo en `03-supervision/`.
+}

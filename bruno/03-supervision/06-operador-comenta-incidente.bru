@@ -1,0 +1,30 @@
+meta {
+  name: 06 Operador Comenta el Incidente (dispara notificación)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/requerimientos/{{incidente_para_notificacion_id}}/comentarios
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_operador}}
+}
+
+body:json {
+  {
+    "texto": "Seguimiento del operador (Bruno)."
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  El evento COMENTARIO de un Operador supervisado dispara una Notificacion
+  para su Supervisor (ObservadorNotificacionesMongo) — ver 04-notificaciones/.
+}

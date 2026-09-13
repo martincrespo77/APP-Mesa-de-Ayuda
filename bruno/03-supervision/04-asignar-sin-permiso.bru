@@ -1,0 +1,29 @@
+meta {
+  name: 04 Asignar Supervisión Sin Permiso (Operador)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/supervisiones
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_operador}}
+}
+
+body:json {
+  {
+    "supervisado_id": "{{tecnico_id}}"
+  }
+}
+
+assert {
+  res.status: eq 403
+}
+
+docs {
+  Matriz de roles: administrar supervisiones es exclusivo de SUPERVISOR.
+}

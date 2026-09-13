@@ -14,11 +14,12 @@ El proyecto está organizado en tres capas independientes que se comunican
 
 ```
 ├── app/                  API REST (FastAPI)
-│   ├── compartido/       Excepciones base de dominio
+│   ├── compartido/       Excepciones base + tipos compartidos (RolUsuario, ServicioComunicarlos)
 │   ├── usuarios/         Dominio, servicios, repositorio y router de Usuario
 │   ├── requerimientos/   Dominio, servicios, repositorio y router de Requerimiento
-│   │   └── dominio/      Requerimiento (base), Incidente, Solicitud, Estados
-│   ├── notificaciones/   Observer: despacha eventos de dominio (auditoría/log)
+│   │   └── dominio/      Requerimiento (base), Incidente, Solicitud, Comentario, Estados
+│   ├── supervision/      Relación N:M Supervisor <-> Operador/Técnico
+│   ├── notificaciones/   Entidad Notificacion + Observer (despacha eventos de dominio)
 │   ├── infraestructura/  Conexión a MongoDB, repositorios concretos (PyMongo)
 │   ├── auth.py           JWT + bcrypt
 │   ├── deps.py           Inyección de dependencias de FastAPI
@@ -35,7 +36,7 @@ El proyecto está organizado en tres capas independientes que se comunican
 │   └── js/, css/         fetch a la API, sin frameworks ni build step
 ├── scripts/
 │   └── seed_mongo.py     Script de siembra de datos de ejemplo en MongoDB
-├── tests/                131 tests (pytest)
+├── tests/                232 tests (pytest)
 ├── bruno/                Colección de requests HTTP (Bruno) para probar la API
 ├── Dockerfile            Imagen multi-stage de la API (uv + usuario no-root)
 └── docker-compose.yml    Orquesta la API + MongoDB
@@ -43,15 +44,20 @@ El proyecto está organizado en tres capas independientes que se comunican
 
 ### Patrones de diseño aplicados
 
-- **Information Expert**: las entidades `Incidente`/`Solicitud` validan sus
-  propias transiciones de estado y los permisos del actor que las invoca.
+- **Information Expert**: `Requerimiento` valida sus propias transiciones de
+  estado y los permisos del actor que las invoca, incluidos los comentarios
+  (`agregar_comentario`, con reapertura automática de un `RESUELTO`) y la
+  derivación entre técnicos (`derivar_interconsulta`).
 - **Factory Method**: `FabricaRequerimientos` crea y reconstruye Incidentes y
   Solicitudes según su tipo.
-- **Observer**: `DespachadorEventos` notifica los eventos de dominio
-  (creación, cambios de estado) a observadores desacoplados (`notificaciones/`).
-- **Repository**: `RepositorioUsuarios`/`RepositorioRequerimientos` son
-  interfaces abstractas; `app/infraestructura/` las implementa con PyMongo,
-  y `tests/fakes.py` las implementa en memoria para los tests.
+- **Observer**: `DespachadorEventos` notifica cada evento de dominio a los
+  observadores suscriptos — `ObservadorLogger` (auditoría por log) y
+  `ObservadorNotificacionesMongo` (genera una `Notificacion` real por cada
+  supervisor de un Operador/Técnico que generó el evento).
+- **Repository**: `RepositorioUsuarios`/`RepositorioRequerimientos`/
+  `RepositorioSupervision`/`RepositorioNotificaciones` son interfaces
+  abstractas; `app/infraestructura/` las implementa con PyMongo, y
+  `tests/fakes.py` las implementa en memoria para los tests.
 
 El cliente de escritorio (`desktop/`) no importa nada de `app/`: se comunica
 exclusivamente por HTTP a través de `ClienteApi`, que tiene dos
@@ -161,9 +167,11 @@ uv run uvicorn app.main:app --reload
 
 `scripts/seed_mongo.py` siembra datos de ejemplo directamente contra
 MongoDB usando las entidades de dominio y los repositorios reales (no pega
-a la API): 5 usuarios (uno por cada rol) y 8 requerimientos (Incidentes y
-Solicitudes) cubriendo los distintos estados del ciclo de vida. Es
-idempotente (usa ids deterministas).
+a la API): 5 usuarios (uno por cada rol, los Solicitantes con
+`servicios_suscriptos`) y 8 requerimientos (Incidentes y Solicitudes)
+cubriendo los distintos estados del ciclo de vida, más una relación de
+supervisión y una notificación de ejemplo. Es idempotente (usa ids
+deterministas).
 
 Con el backend/Mongo ya levantado (Docker o local):
 
@@ -181,10 +189,29 @@ Usuarios de ejemplo creados (contraseña `Seed1234!` para todos):
 | `lucia.gomez@comunicarlos.com`    | Solicitante |
 | `marcos.diaz@comunicarlos.com`    | Solicitante |
 
-Regla de negocio validada en el dominio (`Usuario`): Operador, Técnico y
-Supervisor exigen un email `@comunicarlos.com.ar`; el Solicitante puede
-usar cualquier email. Intentar crear o ascender a un rol operativo con un
-email fuera de ese dominio lanza `EmailCorporativoRequeridoError` (400).
+Reglas de negocio validadas en el dominio (`Usuario`): Operador, Técnico y
+Supervisor exigen un email `@comunicarlos.com.ar` (el Solicitante puede usar
+cualquier email) y no tienen `servicios_suscriptos`; el Solicitante, al
+revés, debe suscribirse a al menos uno de los servicios de la cooperativa
+(`ServicioComunicarlos`: `TELEFONIA_CELULAR`, `INTERNET_BANDA_ANCHA`,
+`TELEVISION`). Violar cualquiera de las dos lanza `EmailCorporativoRequeridoError`
+o `SuscripcionRequeridaError` (400).
+
+### Categorías de Incidente y Solicitud
+
+- **Incidente**: `urgencia` (`CRITICO`/`IMPORTANTE`/`MENOR`), `categoria`
+  (`SERVICIO_INACCESIBLE`/`BLOQUEO_SIM`/`PERDIDA_O_DESTRUCCION_DE_EQUIPO`) y
+  `servicio` (`ServicioComunicarlos`), además de `pasos_reproduccion`.
+- **Solicitud**: `categoria` (`ALTA_SERVICIO`/`BAJA_SERVICIO`) y `servicio`.
+
+Un ticket admite **comentarios** de seguimiento (`POST
+/requerimientos/{id}/comentarios`): Solicitante solo sobre lo propio,
+Operador siempre, Técnico solo si es el asignado, Supervisor nunca. Un
+comentario de Operador/Técnico sobre un `RESUELTO` lo reabre a
+`EN_PROGRESO` (auditado como evento `REAPERTURA`, no como un estado nuevo).
+El técnico asignado puede derivar el ticket a otro técnico (`POST
+/requerimientos/{id}/derivar`, interconsulta) mientras está `EN_ANALISIS`
+o `EN_PROGRESO`.
 
 ## Cliente de escritorio (PyQt6)
 
@@ -264,9 +291,20 @@ Funcionalidad disponible:
   o **confirmar el cierre** de uno `RESUELTO` — las únicas dos transiciones
   que el dominio le permite ejecutar a ese rol.
 
+## Supervisión y notificaciones (solo API)
+
+Un Supervisor administra qué Operadores/Técnicos audita (`POST/GET/DELETE
+/supervisiones`, relación N:M) y consulta las notificaciones que se generan
+automáticamente cuando alguno de sus supervisados genera un evento sobre un
+requerimiento (`GET /notificaciones`, `PATCH /notificaciones/{id}/leida`).
+Es funcionalidad exclusiva de la API: ni el cliente de escritorio ni el
+portal web agregan pantallas para esto (decisión de diseño), pero puede
+probarse con la colección de Bruno (`bruno/03-supervision/`,
+`bruno/04-notificaciones/`) o directamente contra `/docs`.
+
 ## Tests
 
-Correr toda la suite (131 tests):
+Correr toda la suite (232 tests):
 
 ```bash
 uv run pytest
@@ -287,9 +325,9 @@ uv run mypy app/ desktop/
 ## Probar la API con Bruno
 
 La carpeta `bruno/` contiene una colección de requests HTTP organizada por
-dominio (`01-usuarios/`, `02-requerimientos/`), pensada para ejecutarse
-contra los datos del seed. Ver [`bruno/README.md`](bruno/README.md) para el
-detalle de cada flujo.
+dominio (`01-usuarios/`, `02-requerimientos/`, `03-supervision/`,
+`04-notificaciones/`), pensada para ejecutarse contra los datos del seed.
+Ver [`bruno/README.md`](bruno/README.md) para el detalle de cada flujo.
 
 Con la API corriendo y la base poblada:
 

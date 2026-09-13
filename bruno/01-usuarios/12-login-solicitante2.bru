@@ -1,0 +1,29 @@
+meta {
+  name: 12 Login Solicitante 2
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{base_url}}/usuarios/login
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  username: {{email_solicitante2}}
+  password: {{password_seed}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:post-response {
+  bru.setEnvVar("token_solicitante2", res.body.access_token);
+}
+
+docs {
+  Segundo Solicitante del seed, usado para probar que uno no puede ver
+  el requerimiento del otro (fix de seguridad de GET /requerimientos/{id}).
+}

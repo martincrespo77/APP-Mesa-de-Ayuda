@@ -1,0 +1,25 @@
+meta {
+  name: 03 Asignar Supervisión Duplicada
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/supervisiones
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_supervisor}}
+}
+
+body:json {
+  {
+    "supervisado_id": "{{operador_id}}"
+  }
+}
+
+assert {
+  res.status: eq 409
+}

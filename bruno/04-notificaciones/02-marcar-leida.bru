@@ -1,0 +1,19 @@
+meta {
+  name: 02 Marcar Notificación Leída
+  type: http
+  seq: 2
+}
+
+patch {
+  url: {{base_url}}/notificaciones/{{notificacion_id}}/leida
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_supervisor}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.leida: eq true
+}

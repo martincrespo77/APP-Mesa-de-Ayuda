@@ -1,0 +1,23 @@
+meta {
+  name: 03 Marcar Leída una Notificación Ajena
+  type: http
+  seq: 3
+}
+
+patch {
+  url: {{base_url}}/notificaciones/{{notificacion_id}}/leida
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_solicitante2}}
+}
+
+assert {
+  res.status: eq 403
+}
+
+docs {
+  El Solicitante ni siquiera tiene acceso al endpoint (requiere SUPERVISOR).
+  Requiere haber corrido antes "01-usuarios/12 Login Solicitante 2".
+}

@@ -20,13 +20,25 @@ Las carpetas están numeradas y cada request depende de las anteriores
 (tokens e ids se pasan entre requests vía variables de entorno de Bruno):
 
 - `01-usuarios/`: login de los 4 roles, alta/baja/cambio de rol de un
-  usuario (solo Supervisor), y un chequeo negativo (403 para un rol sin
-  permiso).
-- `02-requerimientos/`: crear Incidente y Solicitud, listar con
-  visibilidad propia, y el flujo completo de transiciones de un Incidente
+  usuario (solo Supervisor, incluye `servicios_suscriptos` al crear un
+  Solicitante), un chequeo negativo (403 para un rol sin permiso), un
+  segundo login de Solicitante y los perfiles de Operador/Técnico (para
+  capturar sus ids, usados en `02-requerimientos/` y `03-supervision/`).
+- `02-requerimientos/`: crear Incidente (`urgencia`/`categoria`/`servicio`/
+  `pasos_reproduccion`) y Solicitud (`categoria`/`servicio`), listar con
+  visibilidad propia, el flujo completo de transiciones de un Incidente
   (iniciar análisis → asignar técnico → iniciar progreso → resolver →
-  cerrar), más un chequeo negativo (409 al reintentar una transición
-  sobre un requerimiento ya cerrado).
+  cerrar), un chequeo negativo (409 al reintentar una transición sobre un
+  requerimiento ya cerrado), y el fix de seguridad de `GET /{id}` (401 sin
+  token, 403 si es de otro Solicitante).
+- `03-supervision/`: un Supervisor asigna a un Operador como supervisado
+  (409 si se repite, 403 si lo intenta alguien sin rol Supervisor), lista
+  sus supervisados, y el Operador comenta un incidente nuevo (el anterior
+  ya quedó `CERRADO` y no admite comentarios) para disparar una
+  notificación real a su Supervisor.
+- `04-notificaciones/`: el Supervisor lista sus notificaciones (incluye la
+  generada por `03-supervision/06`) y la marca leída; un tercero sin rol
+  Supervisor no puede tocarla (403).
 
 > **Nota**: tanto el CLI (`bru.setEnvVar`) como la app de escritorio de
 > Bruno persisten los valores seteados en tiempo de ejecución (tokens,

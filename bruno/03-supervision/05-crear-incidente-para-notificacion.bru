@@ -1,0 +1,41 @@
+meta {
+  name: 05 Crear Incidente Nuevo (para disparar notificación)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/requerimientos
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_solicitante}}
+}
+
+body:json {
+  {
+    "tipo": "INCIDENTE",
+    "titulo": "Otro corte (Bruno, para notificación)",
+    "descripcion": "Ticket fresco para que el Operador lo comente.",
+    "urgencia": "MENOR",
+    "categoria": "SERVICIO_INACCESIBLE",
+    "servicio": "TELEVISION",
+    "pasos_reproduccion": "N/A"
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:post-response {
+  bru.setEnvVar("incidente_para_notificacion_id", res.body.id);
+}
+
+docs {
+  `incidente_id` (de 02-requerimientos) ya llegó a CERRADO, y no se puede
+  comentar un ticket cerrado: se crea uno nuevo, todavía ABIERTO, para
+  probar que el comentario del Operador supervisado dispara una Notificacion.
+}
