@@ -17,7 +17,6 @@ así que correr el script varias veces reemplaza los mismos documentos
 """
 
 import uuid
-from datetime import UTC, datetime, timedelta
 
 from app.auth import obtener_password_hash
 from app.compartido.dominio import RolUsuario, ServicioComunicarlos
@@ -25,7 +24,7 @@ from app.config import get_settings
 from app.infraestructura.database import crear_cliente_mongo, crear_indices, obtener_base_datos
 from app.infraestructura.repo_requerimientos import RepositorioRequerimientosMongo
 from app.infraestructura.repo_usuarios import RepositorioUsuariosMongo
-from app.requerimientos.dominio.incidente import Incidente, Severidad
+from app.requerimientos.dominio.incidente import CategoriaIncidente, Incidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud, Solicitud
 from app.usuarios.dominio import Usuario
 
@@ -105,19 +104,21 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         titulo="Corte total de fibra en Barrio Centro",
         descripcion="Sin conectividad desde esta mañana.",
         solicitante_id=solicitante1,
-        severidad=Severidad.CRITICA,
+        urgencia=UrgenciaIncidente.CRITICO,
+        categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+        servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         pasos_reproduccion="ONT sin luz de señal.",
-        servicio_afectado="Fibra óptica residencial",
     )
 
     incidente_en_analisis = Incidente(
         id=_id("incidente-en-analisis"),
-        titulo="Intermitencia en telefonía IP",
+        titulo="Intermitencia en telefonía celular",
         descripcion="Cortes de llamada cada pocos minutos.",
         solicitante_id=solicitante2,
-        severidad=Severidad.MEDIA,
+        urgencia=UrgenciaIncidente.IMPORTANTE,
+        categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+        servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
         pasos_reproduccion="Llamar y esperar 5 minutos.",
-        servicio_afectado="Telefonía IP",
     )
     incidente_en_analisis.iniciar_analisis(autor_id=operador_id, rol_actor=operador)
 
@@ -126,9 +127,10 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         titulo="Degradación de señal de TV",
         descripcion="Pixelado constante en varios canales.",
         solicitante_id=solicitante1,
-        severidad=Severidad.ALTA,
+        urgencia=UrgenciaIncidente.IMPORTANTE,
+        categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+        servicio=ServicioComunicarlos.TELEVISION,
         pasos_reproduccion="Sintonizar cualquier canal HD.",
-        servicio_afectado="TV por fibra",
     )
     incidente_en_progreso.iniciar_analisis(autor_id=operador_id, rol_actor=operador)
     incidente_en_progreso.asignar_tecnico(tecnico_id, autor_id=operador_id, rol_actor=operador)
@@ -136,18 +138,19 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
 
     incidente_resuelto = Incidente(
         id=_id("incidente-resuelto"),
-        titulo="Router no enciende",
-        descripcion="El equipo dejó de responder tras un corte de luz.",
+        titulo="Celular bloqueado tras robo de SIM",
+        descripcion="El cliente reporta la línea bloqueada.",
         solicitante_id=solicitante2,
-        severidad=Severidad.BAJA,
-        pasos_reproduccion="Verificar led de encendido.",
-        servicio_afectado="Fibra óptica residencial",
+        urgencia=UrgenciaIncidente.MENOR,
+        categoria=CategoriaIncidente.BLOQUEO_SIM,
+        servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
+        pasos_reproduccion="Verificar estado de la SIM en el sistema.",
     )
     incidente_resuelto.iniciar_analisis(autor_id=operador_id, rol_actor=operador)
     incidente_resuelto.asignar_tecnico(tecnico_id, autor_id=operador_id, rol_actor=operador)
     incidente_resuelto.iniciar_progreso(autor_id=tecnico_id, rol_actor=tecnico)
     incidente_resuelto.resolver(
-        "Se reemplazó la fuente de alimentación del router.",
+        "Se desbloqueó la SIM tras verificar identidad del titular.",
         autor_id=tecnico_id,
         rol_actor=tecnico,
     )
@@ -157,9 +160,10 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         titulo="Sin señal de fibra en oficina",
         descripcion="Caída total del enlace corporativo.",
         solicitante_id=solicitante1,
-        severidad=Severidad.ALTA,
+        urgencia=UrgenciaIncidente.IMPORTANTE,
+        categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+        servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         pasos_reproduccion="Revisar ONT y patchera.",
-        servicio_afectado="Fibra óptica corporativa",
     )
     incidente_cerrado.iniciar_analisis(autor_id=operador_id, rol_actor=operador)
     incidente_cerrado.asignar_tecnico(tecnico_id, autor_id=operador_id, rol_actor=operador)
@@ -171,12 +175,13 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
 
     incidente_cancelado = Incidente(
         id=_id("incidente-cancelado"),
-        titulo="Lentitud reportada por error",
-        descripcion="El cliente confirmó que era un problema local, no de red.",
+        titulo="Equipo de TV extraviado en mudanza",
+        descripcion="El cliente confirmó que apareció el decodificador.",
         solicitante_id=solicitante2,
-        severidad=Severidad.BAJA,
+        urgencia=UrgenciaIncidente.MENOR,
+        categoria=CategoriaIncidente.PERDIDA_O_DESTRUCCION_DE_EQUIPO,
+        servicio=ServicioComunicarlos.TELEVISION,
         pasos_reproduccion="N/A",
-        servicio_afectado="Fibra óptica residencial",
     )
     incidente_cancelado.cancelar(autor_id=solicitante2, rol_actor=RolUsuario.SOLICITANTE)
 
@@ -185,19 +190,17 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         titulo="Alta de nuevo servicio de internet",
         descripcion="Cliente nuevo solicita instalación.",
         solicitante_id=solicitante1,
-        categoria=CategoriaSolicitud.NUEVO_SERVICIO,
-        fecha_limite=datetime.now(UTC) + timedelta(days=10),
-        impacto_estimado="Bajo",
+        categoria=CategoriaSolicitud.ALTA_SERVICIO,
+        servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
     )
 
     solicitud_en_progreso = Solicitud(
         id=_id("solicitud-en-progreso"),
-        titulo="Upgrade de abono a plan superior",
-        descripcion="Cliente pide más velocidad de bajada.",
+        titulo="Baja de línea de telefonía celular",
+        descripcion="Cliente pide dar de baja una línea adicional.",
         solicitante_id=solicitante2,
-        categoria=CategoriaSolicitud.CAMBIO_ABONO,
-        fecha_limite=datetime.now(UTC) + timedelta(days=3),
-        impacto_estimado="Medio",
+        categoria=CategoriaSolicitud.BAJA_SERVICIO,
+        servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
     )
     solicitud_en_progreso.iniciar_analisis(autor_id=operador_id, rol_actor=operador)
     solicitud_en_progreso.asignar_tecnico(tecnico_id, autor_id=operador_id, rol_actor=operador)

@@ -2,7 +2,8 @@
 
 Cubre la creación polimórfica (`FabricaRequerimientos`), las invariantes de
 las entidades concretas (`Incidente`, `Solicitud`) y la máquina de estados
-con sus reglas de permisos por rol (`Requerimiento`).
+con sus reglas de permisos por rol (`Requerimiento`), incluyendo comentarios
+(con reapertura de un `RESUELTO`) y derivación/interconsulta entre técnicos.
 """
 
 import uuid
@@ -10,14 +11,15 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.compartido.dominio import RolUsuario
+from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.requerimientos.dominio import (
+    CategoriaIncidente,
     CategoriaSolicitud,
     EstadoRequerimiento,
     Incidente,
-    Severidad,
     Solicitud,
     TipoRequerimiento,
+    UrgenciaIncidente,
 )
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
 from app.requerimientos.excepciones import (
@@ -46,9 +48,10 @@ def incidente(solicitante_id: uuid.UUID) -> Incidente:
         titulo="Corte de fibra troncal",
         descripcion="Sin conectividad en el barrio Centro.",
         solicitante_id=solicitante_id,
-        severidad=Severidad.CRITICA,
+        urgencia=UrgenciaIncidente.CRITICO,
+        categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+        servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         pasos_reproduccion="Verificar ONT sin luz de señal.",
-        servicio_afectado="Fibra óptica residencial",
     )
 
 
@@ -67,16 +70,43 @@ class TestIncidenteCreacion:
         assert len(incidente.historial) == 1
         assert incidente.historial[0].tipo_evento.value == "CREACION"
 
-    def test_severidad_invalida_lanza_type_error(self, solicitante_id: uuid.UUID) -> None:
+    def test_urgencia_invalida_lanza_type_error(self, solicitante_id: uuid.UUID) -> None:
         # Act & Assert
         with pytest.raises(TypeError):
             Incidente(
                 titulo="x",
                 descripcion="y",
                 solicitante_id=solicitante_id,
-                severidad="CRITICA",  # type: ignore[arg-type]
+                urgencia="CRITICO",  # type: ignore[arg-type]
+                categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+                servicio=ServicioComunicarlos.TELEVISION,
                 pasos_reproduccion="pasos",
-                servicio_afectado="TV",
+            )
+
+    def test_categoria_invalida_lanza_type_error(self, solicitante_id: uuid.UUID) -> None:
+        # Act & Assert
+        with pytest.raises(TypeError):
+            Incidente(
+                titulo="x",
+                descripcion="y",
+                solicitante_id=solicitante_id,
+                urgencia=UrgenciaIncidente.MENOR,
+                categoria="SERVICIO_INACCESIBLE",  # type: ignore[arg-type]
+                servicio=ServicioComunicarlos.TELEVISION,
+                pasos_reproduccion="pasos",
+            )
+
+    def test_servicio_invalido_lanza_type_error(self, solicitante_id: uuid.UUID) -> None:
+        # Act & Assert
+        with pytest.raises(TypeError):
+            Incidente(
+                titulo="x",
+                descripcion="y",
+                solicitante_id=solicitante_id,
+                urgencia=UrgenciaIncidente.MENOR,
+                categoria=CategoriaIncidente.BLOQUEO_SIM,
+                servicio="TELEVISION",  # type: ignore[arg-type]
+                pasos_reproduccion="pasos",
             )
 
     def test_pasos_reproduccion_vacios_lanza_value_error(self, solicitante_id: uuid.UUID) -> None:
@@ -86,44 +116,48 @@ class TestIncidenteCreacion:
                 titulo="x",
                 descripcion="y",
                 solicitante_id=solicitante_id,
-                severidad=Severidad.BAJA,
+                urgencia=UrgenciaIncidente.MENOR,
+                categoria=CategoriaIncidente.BLOQUEO_SIM,
+                servicio=ServicioComunicarlos.TELEVISION,
                 pasos_reproduccion="   ",
-                servicio_afectado="TV",
             )
 
 
 class TestSolicitudCreacion:
     def test_solicitud_valida_nace_abierta(self, solicitante_id: uuid.UUID) -> None:
-        # Arrange
-        fecha_limite = datetime.now(UTC) + timedelta(days=5)
-
         # Act
         solicitud = Solicitud(
             titulo="Alta de nuevo abono",
             descripcion="Cliente solicita nueva conexión.",
             solicitante_id=solicitante_id,
-            categoria=CategoriaSolicitud.NUEVO_SERVICIO,
-            fecha_limite=fecha_limite,
-            impacto_estimado="Bajo",
+            categoria=CategoriaSolicitud.ALTA_SERVICIO,
+            servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         )
 
         # Assert
         assert solicitud.tipo == TipoRequerimiento.SOLICITUD
         assert solicitud.estado == EstadoRequerimiento.ABIERTO
 
-    def test_fecha_limite_en_el_pasado_lanza_value_error(self, solicitante_id: uuid.UUID) -> None:
-        # Arrange
-        fecha_pasada = datetime.now(UTC) - timedelta(days=1)
-
+    def test_categoria_invalida_lanza_type_error(self, solicitante_id: uuid.UUID) -> None:
         # Act & Assert
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             Solicitud(
                 titulo="x",
                 descripcion="y",
                 solicitante_id=solicitante_id,
-                categoria=CategoriaSolicitud.FACTURACION,
-                fecha_limite=fecha_pasada,
-                impacto_estimado="Bajo",
+                categoria="ALTA_SERVICIO",  # type: ignore[arg-type]
+                servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
+            )
+
+    def test_servicio_invalido_lanza_type_error(self, solicitante_id: uuid.UUID) -> None:
+        # Act & Assert
+        with pytest.raises(TypeError):
+            Solicitud(
+                titulo="x",
+                descripcion="y",
+                solicitante_id=solicitante_id,
+                categoria=CategoriaSolicitud.BAJA_SERVICIO,
+                servicio="TELEFONIA_CELULAR",  # type: ignore[arg-type]
             )
 
 
@@ -292,6 +326,230 @@ class TestCancelacion:
             incidente.cancelar(autor_id=uuid.uuid4(), rol_actor=RolUsuario.SUPERVISOR)
 
 
+class TestAgregarComentario:
+    def test_solicitante_dueno_puede_comentar(
+        self, incidente: Incidente, solicitante_id: uuid.UUID
+    ) -> None:
+        # Act
+        comentario = incidente.agregar_comentario(
+            "¿Alguna novedad?", autor_id=solicitante_id, rol_actor=RolUsuario.SOLICITANTE
+        )
+
+        # Assert
+        assert comentario.texto == "¿Alguna novedad?"
+        assert incidente.comentarios == [comentario]
+        assert incidente.historial[-1].tipo_evento == TipoEventoRequerimiento.COMENTARIO
+
+    def test_solicitante_ajeno_no_puede_comentar(self, incidente: Incidente) -> None:
+        # Act & Assert
+        with pytest.raises(PermisoDenegadoError):
+            incidente.agregar_comentario(
+                "x", autor_id=uuid.uuid4(), rol_actor=RolUsuario.SOLICITANTE
+            )
+
+    def test_operador_siempre_puede_comentar(self, incidente: Incidente) -> None:
+        # Act
+        comentario = incidente.agregar_comentario(
+            "Seguimiento del operador.", autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR
+        )
+
+        # Assert
+        assert comentario in incidente.comentarios
+
+    def test_tecnico_no_asignado_no_puede_comentar(
+        self, incidente: Incidente, tecnico_id: uuid.UUID
+    ) -> None:
+        # Arrange: incidente sin técnico asignado todavía
+        # Act & Assert
+        with pytest.raises(PermisoDenegadoError):
+            incidente.agregar_comentario("x", autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO)
+
+    def test_tecnico_asignado_puede_comentar(
+        self, incidente: Incidente, tecnico_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        incidente.iniciar_analisis(autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR)
+        incidente.asignar_tecnico(tecnico_id, autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR)
+
+        # Act
+        comentario = incidente.agregar_comentario(
+            "Avanzando con el diagnóstico.", autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO
+        )
+
+        # Assert
+        assert comentario in incidente.comentarios
+
+    def test_supervisor_nunca_puede_comentar(self, incidente: Incidente) -> None:
+        # Act & Assert
+        with pytest.raises(PermisoDenegadoError):
+            incidente.agregar_comentario(
+                "x", autor_id=uuid.uuid4(), rol_actor=RolUsuario.SUPERVISOR
+            )
+
+    def test_texto_vacio_lanza_value_error(
+        self, incidente: Incidente, solicitante_id: uuid.UUID
+    ) -> None:
+        # Act & Assert
+        with pytest.raises(ValueError):
+            incidente.agregar_comentario(
+                "   ", autor_id=solicitante_id, rol_actor=RolUsuario.SOLICITANTE
+            )
+
+    def test_no_se_puede_comentar_un_cerrado(
+        self, incidente: Incidente, solicitante_id: uuid.UUID, tecnico_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        _avanzar_hasta_en_progreso(incidente, tecnico_id)
+        incidente.resolver("Nota", autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO)
+        incidente.cerrar(autor_id=solicitante_id, rol_actor=RolUsuario.SOLICITANTE)
+
+        # Act & Assert
+        with pytest.raises(TransicionInvalidaError):
+            incidente.agregar_comentario(
+                "x", autor_id=solicitante_id, rol_actor=RolUsuario.SOLICITANTE
+            )
+
+    def test_no_se_puede_comentar_un_cancelado(
+        self, incidente: Incidente, solicitante_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        incidente.cancelar(autor_id=solicitante_id, rol_actor=RolUsuario.SOLICITANTE)
+
+        # Act & Assert
+        with pytest.raises(TransicionInvalidaError):
+            incidente.agregar_comentario(
+                "x", autor_id=solicitante_id, rol_actor=RolUsuario.SOLICITANTE
+            )
+
+    def test_comentario_de_operador_reabre_un_resuelto(
+        self, incidente: Incidente, tecnico_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        _avanzar_hasta_en_progreso(incidente, tecnico_id)
+        incidente.resolver("Nota", autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO)
+
+        # Act
+        incidente.agregar_comentario(
+            "No quedó resuelto, vuelvo a abrir.",
+            autor_id=uuid.uuid4(),
+            rol_actor=RolUsuario.OPERADOR,
+        )
+
+        # Assert
+        assert incidente.estado == EstadoRequerimiento.EN_PROGRESO
+        assert incidente.historial[-1].tipo_evento == TipoEventoRequerimiento.REAPERTURA
+        assert incidente.historial[-2].tipo_evento == TipoEventoRequerimiento.COMENTARIO
+
+    def test_comentario_de_tecnico_asignado_reabre_un_resuelto(
+        self, incidente: Incidente, tecnico_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        _avanzar_hasta_en_progreso(incidente, tecnico_id)
+        incidente.resolver("Nota", autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO)
+
+        # Act
+        incidente.agregar_comentario(
+            "Falta un ajuste más.", autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO
+        )
+
+        # Assert
+        assert incidente.estado == EstadoRequerimiento.EN_PROGRESO
+
+    def test_comentario_de_solicitante_no_reabre_un_resuelto(
+        self, incidente: Incidente, solicitante_id: uuid.UUID, tecnico_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        _avanzar_hasta_en_progreso(incidente, tecnico_id)
+        incidente.resolver("Nota", autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO)
+
+        # Act
+        incidente.agregar_comentario(
+            "Gracias, quedó resuelto.", autor_id=solicitante_id, rol_actor=RolUsuario.SOLICITANTE
+        )
+
+        # Assert: el comentario del dueño no reabre el ticket
+        assert incidente.estado == EstadoRequerimiento.RESUELTO
+        assert incidente.historial[-1].tipo_evento == TipoEventoRequerimiento.COMENTARIO
+
+
+class TestDerivarInterconsulta:
+    def test_tecnico_asignado_puede_derivar(
+        self, incidente: Incidente, tecnico_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        incidente.iniciar_analisis(autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR)
+        incidente.asignar_tecnico(tecnico_id, autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR)
+        tecnico_destino_id = uuid.uuid4()
+
+        # Act
+        incidente.derivar_interconsulta(
+            tecnico_destino_id, autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO
+        )
+
+        # Assert
+        assert incidente.tecnico_asignado_id == tecnico_destino_id
+        assert incidente.historial[-1].tipo_evento == TipoEventoRequerimiento.DERIVACION
+
+    def test_tecnico_no_asignado_no_puede_derivar(self, incidente: Incidente) -> None:
+        # Arrange
+        incidente.iniciar_analisis(autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR)
+        incidente.asignar_tecnico(
+            uuid.uuid4(), autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR
+        )
+
+        # Act & Assert
+        with pytest.raises(PermisoDenegadoError):
+            incidente.derivar_interconsulta(
+                uuid.uuid4(), autor_id=uuid.uuid4(), rol_actor=RolUsuario.TECNICO
+            )
+
+    def test_otro_rol_no_puede_derivar(self, incidente: Incidente, tecnico_id: uuid.UUID) -> None:
+        # Arrange
+        incidente.iniciar_analisis(autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR)
+        incidente.asignar_tecnico(tecnico_id, autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR)
+
+        # Act & Assert
+        with pytest.raises(PermisoDenegadoError):
+            incidente.derivar_interconsulta(
+                uuid.uuid4(), autor_id=uuid.uuid4(), rol_actor=RolUsuario.SUPERVISOR
+            )
+
+    def test_no_se_puede_derivar_al_mismo_tecnico(
+        self, incidente: Incidente, tecnico_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        incidente.iniciar_analisis(autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR)
+        incidente.asignar_tecnico(tecnico_id, autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR)
+
+        # Act & Assert
+        with pytest.raises(TransicionInvalidaError):
+            incidente.derivar_interconsulta(
+                tecnico_id, autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO
+            )
+
+    def test_no_se_puede_derivar_en_abierto(
+        self, incidente: Incidente, tecnico_id: uuid.UUID
+    ) -> None:
+        # Act & Assert: todavía no hay técnico asignado ni tiene sentido derivar
+        with pytest.raises(TransicionInvalidaError):
+            incidente.derivar_interconsulta(
+                uuid.uuid4(), autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO
+            )
+
+    def test_no_se_puede_derivar_un_resuelto(
+        self, incidente: Incidente, tecnico_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        _avanzar_hasta_en_progreso(incidente, tecnico_id)
+        incidente.resolver("Nota", autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO)
+
+        # Act & Assert
+        with pytest.raises(TransicionInvalidaError):
+            incidente.derivar_interconsulta(
+                uuid.uuid4(), autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO
+            )
+
+
 class TestHistorialEsUnaCopiaDefensiva:
     def test_mutar_la_lista_devuelta_no_afecta_al_original(self, incidente: Incidente) -> None:
         # Arrange
@@ -303,6 +561,19 @@ class TestHistorialEsUnaCopiaDefensiva:
         # Assert
         assert len(incidente.historial) == 1
 
+    def test_mutar_la_lista_de_comentarios_no_afecta_al_original(
+        self, incidente: Incidente, solicitante_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        incidente.agregar_comentario("x", autor_id=solicitante_id, rol_actor=RolUsuario.SOLICITANTE)
+        comentarios = incidente.comentarios
+
+        # Act
+        comentarios.clear()
+
+        # Assert
+        assert len(incidente.comentarios) == 1
+
 
 class TestFabricaRequerimientos:
     def test_crear_incidente_devuelve_instancia_incidente(self, solicitante_id: uuid.UUID) -> None:
@@ -312,9 +583,10 @@ class TestFabricaRequerimientos:
             titulo="x",
             descripcion="y",
             solicitante_id=solicitante_id,
-            severidad=Severidad.MEDIA,
+            urgencia=UrgenciaIncidente.IMPORTANTE,
+            categoria=CategoriaIncidente.BLOQUEO_SIM,
+            servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
             pasos_reproduccion="p",
-            servicio_afectado="s",
         )
 
         # Assert
@@ -328,9 +600,8 @@ class TestFabricaRequerimientos:
             titulo="x",
             descripcion="y",
             solicitante_id=solicitante_id,
-            categoria=CategoriaSolicitud.FACTURACION,
-            fecha_limite=datetime.now(UTC) + timedelta(days=1),
-            impacto_estimado="bajo",
+            categoria=CategoriaSolicitud.BAJA_SERVICIO,
+            servicio=ServicioComunicarlos.TELEVISION,
         )
 
         # Assert
@@ -346,7 +617,7 @@ class TestFabricaRequerimientos:
 class TestReconstruccionDesdePersistencia:
     """Cubre `reconstruir`: la vía de lectura desde Mongo (Paso 5), que NO
     debe comportarse como una creación nueva (sin evento CREACION espurio,
-    con el estado/historial real tal como estaba persistido)."""
+    con el estado/historial/comentarios real tal como estaba persistido)."""
 
     def test_reconstruir_incidente_no_agrega_evento_creacion(
         self, solicitante_id: uuid.UUID, tecnico_id: uuid.UUID
@@ -372,9 +643,10 @@ class TestReconstruccionDesdePersistencia:
             tecnico_asignado_id=tecnico_id,
             nota_resolucion=None,
             historial=[evento_original],
-            severidad=Severidad.CRITICA,
+            urgencia=UrgenciaIncidente.CRITICO,
+            categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+            servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
             pasos_reproduccion="Verificar ONT sin luz de señal.",
-            servicio_afectado="Fibra óptica residencial",
         )
 
         # Assert: se restauró tal cual, sin generar un evento CREACION nuevo
@@ -382,7 +654,39 @@ class TestReconstruccionDesdePersistencia:
         assert incidente.fecha_creacion == fecha_creacion_original
         assert incidente.tecnico_asignado_id == tecnico_id
         assert incidente.historial == [evento_original]
-        assert incidente.severidad == Severidad.CRITICA
+        assert incidente.comentarios == []
+        assert incidente.urgencia == UrgenciaIncidente.CRITICO
+
+    def test_reconstruir_incidente_restaura_comentarios(
+        self, solicitante_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        from app.requerimientos.dominio.comentario import Comentario
+
+        comentario_original = Comentario(
+            requerimiento_id=uuid.uuid4(), autor_id=solicitante_id, texto="Comentario persistido."
+        )
+
+        # Act
+        incidente = Incidente.reconstruir(
+            id=uuid.uuid4(),
+            titulo="x",
+            descripcion="y",
+            solicitante_id=solicitante_id,
+            estado=EstadoRequerimiento.ABIERTO,
+            fecha_creacion=datetime.now(UTC),
+            tecnico_asignado_id=None,
+            nota_resolucion=None,
+            historial=[],
+            comentarios=[comentario_original],
+            urgencia=UrgenciaIncidente.MENOR,
+            categoria=CategoriaIncidente.BLOQUEO_SIM,
+            servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
+            pasos_reproduccion="p",
+        )
+
+        # Assert
+        assert incidente.comentarios == [comentario_original]
 
     def test_incidente_reconstruido_sigue_pudiendo_transicionar(
         self, solicitante_id: uuid.UUID, tecnico_id: uuid.UUID
@@ -398,9 +702,10 @@ class TestReconstruccionDesdePersistencia:
             tecnico_asignado_id=tecnico_id,
             nota_resolucion=None,
             historial=[],
-            severidad=Severidad.BAJA,
+            urgencia=UrgenciaIncidente.MENOR,
+            categoria=CategoriaIncidente.BLOQUEO_SIM,
+            servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
             pasos_reproduccion="p",
-            servicio_afectado="s",
         )
 
         # Act
@@ -409,11 +714,8 @@ class TestReconstruccionDesdePersistencia:
         # Assert
         assert incidente.estado == EstadoRequerimiento.RESUELTO
 
-    def test_reconstruir_solicitud_permite_fecha_limite_pasada(
-        self, solicitante_id: uuid.UUID
-    ) -> None:
-        # Arrange: una solicitud histórica cuyo plazo ya venció (el
-        # constructor normal la rechazaría por `_validar_fecha_limite`)
+    def test_reconstruir_solicitud(self, solicitante_id: uuid.UUID) -> None:
+        # Arrange: una solicitud histórica ya cerrada
         fecha_pasada = datetime.now(UTC) - timedelta(days=30)
 
         # Act
@@ -427,13 +729,12 @@ class TestReconstruccionDesdePersistencia:
             tecnico_asignado_id=None,
             nota_resolucion=None,
             historial=[],
-            categoria=CategoriaSolicitud.NUEVO_SERVICIO,
-            fecha_limite=fecha_pasada,
-            impacto_estimado="Bajo",
+            categoria=CategoriaSolicitud.ALTA_SERVICIO,
+            servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         )
 
         # Assert
-        assert solicitud.fecha_limite == fecha_pasada
+        assert solicitud.categoria == CategoriaSolicitud.ALTA_SERVICIO
         assert solicitud.estado == EstadoRequerimiento.CERRADO
 
     def test_fabrica_reconstruir_dispatchea_por_tipo(self, solicitante_id: uuid.UUID) -> None:
@@ -449,9 +750,10 @@ class TestReconstruccionDesdePersistencia:
             tecnico_asignado_id=None,
             nota_resolucion=None,
             historial=[],
-            severidad=Severidad.MEDIA,
+            urgencia=UrgenciaIncidente.IMPORTANTE,
+            categoria=CategoriaIncidente.PERDIDA_O_DESTRUCCION_DE_EQUIPO,
+            servicio=ServicioComunicarlos.TELEVISION,
             pasos_reproduccion="p",
-            servicio_afectado="s",
         )
 
         # Assert

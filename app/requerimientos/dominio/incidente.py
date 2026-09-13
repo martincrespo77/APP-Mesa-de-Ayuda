@@ -5,18 +5,27 @@ from datetime import datetime
 from enum import StrEnum
 from typing import cast
 
+from app.compartido.dominio import ServicioComunicarlos
 from app.requerimientos.dominio.base import Requerimiento
+from app.requerimientos.dominio.comentario import Comentario
 from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerimiento
 from app.requerimientos.eventos import EventoRequerimiento
 
 
-class Severidad(StrEnum):
-    """Nivel de impacto técnico del incidente."""
+class UrgenciaIncidente(StrEnum):
+    """Nivel de urgencia con el que debe atenderse el incidente."""
 
-    BAJA = "BAJA"
-    MEDIA = "MEDIA"
-    ALTA = "ALTA"
-    CRITICA = "CRITICA"
+    CRITICO = "CRITICO"
+    IMPORTANTE = "IMPORTANTE"
+    MENOR = "MENOR"
+
+
+class CategoriaIncidente(StrEnum):
+    """Naturaleza del incidente reportado."""
+
+    SERVICIO_INACCESIBLE = "SERVICIO_INACCESIBLE"
+    BLOQUEO_SIM = "BLOQUEO_SIM"
+    PERDIDA_O_DESTRUCCION_DE_EQUIPO = "PERDIDA_O_DESTRUCCION_DE_EQUIPO"
 
 
 class Incidente(Requerimiento):
@@ -27,15 +36,17 @@ class Incidente(Requerimiento):
         titulo: str,
         descripcion: str,
         solicitante_id: uuid.UUID,
-        severidad: Severidad,
+        urgencia: UrgenciaIncidente,
+        categoria: CategoriaIncidente,
+        servicio: ServicioComunicarlos,
         pasos_reproduccion: str,
-        servicio_afectado: str,
         id: uuid.UUID | None = None,
     ) -> None:
         super().__init__(titulo, descripcion, solicitante_id, id)
-        self.severidad = self._validar_severidad(severidad)
+        self.urgencia = self._validar_urgencia(urgencia)
+        self.categoria = self._validar_categoria(categoria)
+        self.servicio = self._validar_servicio(servicio)
         self.pasos_reproduccion = self._validar_pasos_reproduccion(pasos_reproduccion)
-        self.servicio_afectado = self._validar_servicio_afectado(servicio_afectado)
 
     @property
     def tipo(self) -> TipoRequerimiento:
@@ -54,9 +65,11 @@ class Incidente(Requerimiento):
         tecnico_asignado_id: uuid.UUID | None,
         nota_resolucion: str | None,
         historial: list[EventoRequerimiento],
-        severidad: Severidad,
+        urgencia: UrgenciaIncidente,
+        categoria: CategoriaIncidente,
+        servicio: ServicioComunicarlos,
         pasos_reproduccion: str,
-        servicio_afectado: str,
+        comentarios: list[Comentario] | None = None,
     ) -> "Incidente":
         """Reconstruye un `Incidente` ya persistido (uso exclusivo de repositorios)."""
         instancia = cast(
@@ -71,18 +84,32 @@ class Incidente(Requerimiento):
                 tecnico_asignado_id=tecnico_asignado_id,
                 nota_resolucion=nota_resolucion,
                 historial=historial,
+                comentarios=comentarios,
             ),
         )
-        instancia.severidad = severidad
+        instancia.urgencia = urgencia
+        instancia.categoria = categoria
+        instancia.servicio = servicio
         instancia.pasos_reproduccion = pasos_reproduccion
-        instancia.servicio_afectado = servicio_afectado
         return instancia
 
     @staticmethod
-    def _validar_severidad(severidad: Severidad) -> Severidad:
-        if not isinstance(severidad, Severidad):
-            raise TypeError("La severidad debe ser una instancia de Severidad.")
-        return severidad
+    def _validar_urgencia(urgencia: UrgenciaIncidente) -> UrgenciaIncidente:
+        if not isinstance(urgencia, UrgenciaIncidente):
+            raise TypeError("La urgencia debe ser una instancia de UrgenciaIncidente.")
+        return urgencia
+
+    @staticmethod
+    def _validar_categoria(categoria: CategoriaIncidente) -> CategoriaIncidente:
+        if not isinstance(categoria, CategoriaIncidente):
+            raise TypeError("La categoría debe ser una instancia de CategoriaIncidente.")
+        return categoria
+
+    @staticmethod
+    def _validar_servicio(servicio: ServicioComunicarlos) -> ServicioComunicarlos:
+        if not isinstance(servicio, ServicioComunicarlos):
+            raise TypeError("El servicio debe ser una instancia de ServicioComunicarlos.")
+        return servicio
 
     @staticmethod
     def _validar_pasos_reproduccion(pasos_reproduccion: str) -> str:
@@ -92,12 +119,3 @@ class Incidente(Requerimiento):
         if not pasos_normalizados:
             raise ValueError("Los pasos de reproducción no pueden estar vacíos.")
         return pasos_normalizados
-
-    @staticmethod
-    def _validar_servicio_afectado(servicio_afectado: str) -> str:
-        if not isinstance(servicio_afectado, str):
-            raise TypeError("El servicio afectado debe ser una cadena de texto.")
-        servicio_normalizado = servicio_afectado.strip()
-        if not servicio_normalizado:
-            raise ValueError("El servicio afectado no puede estar vacío.")
-        return servicio_normalizado

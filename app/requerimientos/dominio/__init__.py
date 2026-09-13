@@ -7,16 +7,19 @@ sin conocer el layout interno del subpaquete.
 """
 
 from app.requerimientos.dominio.base import Requerimiento
+from app.requerimientos.dominio.comentario import Comentario
 from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerimiento
-from app.requerimientos.dominio.incidente import Incidente, Severidad
+from app.requerimientos.dominio.incidente import CategoriaIncidente, Incidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud, Solicitud
 
 __all__ = [
     "Requerimiento",
+    "Comentario",
     "Incidente",
     "Solicitud",
     "EstadoRequerimiento",
     "TipoRequerimiento",
-    "Severidad",
+    "UrgenciaIncidente",
+    "CategoriaIncidente",
     "CategoriaSolicitud",
 ]

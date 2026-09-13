@@ -15,11 +15,13 @@ from app.deps import obtener_servicio_requerimientos, obtener_usuario_actual
 from app.requerimientos.dominio.base import Requerimiento
 from app.requerimientos.dominio.estados import TipoRequerimiento
 from app.requerimientos.dominio.incidente import Incidente
-from app.requerimientos.excepciones import RequerimientoNoEncontradoError
 from app.requerimientos.schemas import (
+    AgregarComentarioRequest,
     AsignarTecnicoRequest,
+    ComentarioResponse,
     CrearIncidenteRequest,
     CrearRequerimientoRequest,
+    DerivarInterconsultaRequest,
     IncidenteResponse,
     RequerimientoResponse,
     ResolverRequest,
@@ -51,9 +53,10 @@ def crear_requerimiento(
             titulo=datos.titulo,
             descripcion=datos.descripcion,
             solicitante_id=usuario_actual.id,
-            severidad=datos.severidad,
+            urgencia=datos.urgencia,
+            categoria=datos.categoria,
+            servicio=datos.servicio,
             pasos_reproduccion=datos.pasos_reproduccion,
-            servicio_afectado=datos.servicio_afectado,
         )
     else:
         requerimiento = servicio.crear(
@@ -62,8 +65,7 @@ def crear_requerimiento(
             descripcion=datos.descripcion,
             solicitante_id=usuario_actual.id,
             categoria=datos.categoria,
-            fecha_limite=datos.fecha_limite,
-            impacto_estimado=datos.impacto_estimado,
+            servicio=datos.servicio,
         )
     return _a_respuesta(requerimiento)
 
@@ -81,13 +83,15 @@ def listar_requerimientos(
 @router.get("/{requerimiento_id}", response_model=RequerimientoResponse)
 def obtener_requerimiento(
     requerimiento_id: uuid.UUID,
+    usuario_actual: Usuario = Depends(obtener_usuario_actual),
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> IncidenteResponse | SolicitudResponse:
-    requerimiento = servicio.obtener_por_id(requerimiento_id)
-    if requerimiento is None:
-        raise RequerimientoNoEncontradoError(
-            f"No existe un requerimiento con id '{requerimiento_id}'."
-        )
+    """Exige autenticación y aplica la misma visibilidad que el listado: un
+    Solicitante no puede consultar el requerimiento de otro (fix de
+    seguridad: antes este endpoint no exigía ni auth ni propiedad)."""
+    requerimiento = servicio.obtener_visible_para(
+        requerimiento_id, usuario_actual.rol, usuario_actual.id
+    )
     return _a_respuesta(requerimiento)
 
 
@@ -158,4 +162,32 @@ def cancelar(
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> IncidenteResponse | SolicitudResponse:
     requerimiento = servicio.cancelar(requerimiento_id, usuario_actual.id, usuario_actual.rol)
+    return _a_respuesta(requerimiento)
+
+
+@router.post(
+    "/{requerimiento_id}/comentarios", response_model=ComentarioResponse, status_code=201
+)
+def agregar_comentario(
+    requerimiento_id: uuid.UUID,
+    datos: AgregarComentarioRequest,
+    usuario_actual: Usuario = Depends(obtener_usuario_actual),
+    servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
+) -> ComentarioResponse:
+    comentario = servicio.agregar_comentario(
+        requerimiento_id, datos.texto, usuario_actual.id, usuario_actual.rol
+    )
+    return ComentarioResponse.model_validate(comentario)
+
+
+@router.post("/{requerimiento_id}/derivar", response_model=RequerimientoResponse)
+def derivar_interconsulta(
+    requerimiento_id: uuid.UUID,
+    datos: DerivarInterconsultaRequest,
+    usuario_actual: Usuario = Depends(obtener_usuario_actual),
+    servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
+) -> IncidenteResponse | SolicitudResponse:
+    requerimiento = servicio.derivar_interconsulta(
+        requerimiento_id, datos.tecnico_destino_id, usuario_actual.id, usuario_actual.rol
+    )
     return _a_respuesta(requerimiento)

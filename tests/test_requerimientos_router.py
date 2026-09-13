@@ -7,7 +7,6 @@ conexión Mongo, Paso 5) se sobreescribe con un no-op.
 
 import uuid
 from collections.abc import Generator
-from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -78,9 +77,18 @@ _BODY_INCIDENTE = {
     "tipo": "INCIDENTE",
     "titulo": "Corte de fibra",
     "descripcion": "Sin señal en el sector norte.",
-    "severidad": "ALTA",
+    "urgencia": "IMPORTANTE",
+    "categoria": "SERVICIO_INACCESIBLE",
+    "servicio": "INTERNET_BANDA_ANCHA",
     "pasos_reproduccion": "Reiniciar ONT.",
-    "servicio_afectado": "Fibra óptica",
+}
+
+_BODY_SOLICITUD = {
+    "tipo": "SOLICITUD",
+    "titulo": "Alta de servicio",
+    "descripcion": "Nueva conexión residencial.",
+    "categoria": "ALTA_SERVICIO",
+    "servicio": "INTERNET_BANDA_ANCHA",
 }
 
 
@@ -108,20 +116,10 @@ class TestCrear:
         # Arrange
         _crear_usuario(repo_usuarios, "sol@x.com", RolUsuario.SOLICITANTE)
         token = _token_de(cliente, "sol@x.com")
-        fecha_limite = (datetime.now(UTC) + timedelta(days=5)).isoformat()
 
         # Act
         respuesta = cliente.post(
-            "/requerimientos",
-            json={
-                "tipo": "SOLICITUD",
-                "titulo": "Alta de servicio",
-                "descripcion": "Nueva conexión residencial.",
-                "categoria": "NUEVO_SERVICIO",
-                "fecha_limite": fecha_limite,
-                "impacto_estimado": "Bajo",
-            },
-            headers=_headers(token),
+            "/requerimientos", json=_BODY_SOLICITUD, headers=_headers(token)
         )
 
         # Assert
@@ -187,6 +185,53 @@ class TestListarYObtener:
 
         # Assert
         assert respuesta.status_code == 404
+
+    def test_obtener_por_id_sin_token_devuelve_401(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange (fix de seguridad: antes este endpoint no exigía autenticación)
+        _crear_usuario(repo_usuarios, "sol@x.com", RolUsuario.SOLICITANTE)
+        token = _token_de(cliente, "sol@x.com")
+        creado = cliente.post("/requerimientos", json=_BODY_INCIDENTE, headers=_headers(token))
+        requerimiento_id = creado.json()["id"]
+
+        # Act
+        respuesta = cliente.get(f"/requerimientos/{requerimiento_id}")
+
+        # Assert
+        assert respuesta.status_code == 401
+
+    def test_solicitante_no_puede_obtener_un_requerimiento_ajeno(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange (fix de seguridad: antes no se validaba propiedad)
+        _crear_usuario(repo_usuarios, "sol1@x.com", RolUsuario.SOLICITANTE)
+        _crear_usuario(repo_usuarios, "sol2@x.com", RolUsuario.SOLICITANTE)
+        token_1 = _token_de(cliente, "sol1@x.com")
+        token_2 = _token_de(cliente, "sol2@x.com")
+        creado = cliente.post("/requerimientos", json=_BODY_INCIDENTE, headers=_headers(token_1))
+        requerimiento_id = creado.json()["id"]
+
+        # Act
+        respuesta = cliente.get(f"/requerimientos/{requerimiento_id}", headers=_headers(token_2))
+
+        # Assert
+        assert respuesta.status_code == 403
+
+    def test_solicitante_puede_obtener_su_propio_requerimiento(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange
+        _crear_usuario(repo_usuarios, "sol@x.com", RolUsuario.SOLICITANTE)
+        token = _token_de(cliente, "sol@x.com")
+        creado = cliente.post("/requerimientos", json=_BODY_INCIDENTE, headers=_headers(token))
+        requerimiento_id = creado.json()["id"]
+
+        # Act
+        respuesta = cliente.get(f"/requerimientos/{requerimiento_id}", headers=_headers(token))
+
+        # Assert
+        assert respuesta.status_code == 200
 
 
 class TestTransicionesViaHttp:
@@ -291,3 +336,88 @@ class TestTransicionesViaHttp:
 
         # Assert
         assert respuesta.status_code == 404
+
+
+class TestComentariosYDerivacionViaHttp:
+    def test_agregar_comentario_devuelve_201(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange
+        _crear_usuario(repo_usuarios, "sol@x.com", RolUsuario.SOLICITANTE)
+        token = _token_de(cliente, "sol@x.com")
+        creado = cliente.post("/requerimientos", json=_BODY_INCIDENTE, headers=_headers(token))
+        requerimiento_id = creado.json()["id"]
+
+        # Act
+        respuesta = cliente.post(
+            f"/requerimientos/{requerimiento_id}/comentarios",
+            json={"texto": "¿Alguna novedad?"},
+            headers=_headers(token),
+        )
+
+        # Assert
+        assert respuesta.status_code == 201
+        assert respuesta.json()["texto"] == "¿Alguna novedad?"
+
+    def test_supervisor_no_puede_comentar_devuelve_403(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange
+        _crear_usuario(repo_usuarios, "sol@x.com", RolUsuario.SOLICITANTE)
+        _crear_usuario(repo_usuarios, "sup@comunicarlos.com.ar", RolUsuario.SUPERVISOR)
+        token_sol = _token_de(cliente, "sol@x.com")
+        token_sup = _token_de(cliente, "sup@comunicarlos.com.ar")
+        creado = cliente.post(
+            "/requerimientos", json=_BODY_INCIDENTE, headers=_headers(token_sol)
+        )
+        requerimiento_id = creado.json()["id"]
+
+        # Act
+        respuesta = cliente.post(
+            f"/requerimientos/{requerimiento_id}/comentarios",
+            json={"texto": "x"},
+            headers=_headers(token_sup),
+        )
+
+        # Assert
+        assert respuesta.status_code == 403
+
+    def test_derivar_interconsulta_devuelve_200(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange
+        solicitante = _crear_usuario(repo_usuarios, "sol@x.com", RolUsuario.SOLICITANTE)
+        tecnico_origen = _crear_usuario(
+            repo_usuarios, "tec1@comunicarlos.com.ar", RolUsuario.TECNICO
+        )
+        tecnico_destino = _crear_usuario(
+            repo_usuarios, "tec2@comunicarlos.com.ar", RolUsuario.TECNICO
+        )
+        _crear_usuario(repo_usuarios, "op@comunicarlos.com.ar", RolUsuario.OPERADOR)
+        token_solicitante = _token_de(cliente, solicitante.email)
+        token_operador = _token_de(cliente, "op@comunicarlos.com.ar")
+        token_tecnico_origen = _token_de(cliente, tecnico_origen.email)
+        creado = cliente.post(
+            "/requerimientos", json=_BODY_INCIDENTE, headers=_headers(token_solicitante)
+        )
+        requerimiento_id = creado.json()["id"]
+        cliente.post(
+            f"/requerimientos/{requerimiento_id}/iniciar-analisis",
+            headers=_headers(token_operador),
+        )
+        cliente.post(
+            f"/requerimientos/{requerimiento_id}/asignar-tecnico",
+            json={"tecnico_id": str(tecnico_origen.id)},
+            headers=_headers(token_operador),
+        )
+
+        # Act
+        respuesta = cliente.post(
+            f"/requerimientos/{requerimiento_id}/derivar",
+            json={"tecnico_destino_id": str(tecnico_destino.id)},
+            headers=_headers(token_tecnico_origen),
+        )
+
+        # Assert
+        assert respuesta.status_code == 200
+        assert respuesta.json()["tecnico_asignado_id"] == str(tecnico_destino.id)

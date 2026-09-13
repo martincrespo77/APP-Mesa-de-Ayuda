@@ -1,26 +1,26 @@
-"""Entidad concreta `Solicitud`: pedido planificado de servicio o consulta."""
+"""Entidad concreta `Solicitud`: pedido planificado de alta o baja de servicio."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from typing import cast
 
+from app.compartido.dominio import ServicioComunicarlos
 from app.requerimientos.dominio.base import Requerimiento
+from app.requerimientos.dominio.comentario import Comentario
 from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerimiento
 from app.requerimientos.eventos import EventoRequerimiento
 
 
 class CategoriaSolicitud(StrEnum):
-    """Naturaleza administrativa de la solicitud."""
+    """Naturaleza administrativa de la solicitud sobre un servicio."""
 
-    NUEVO_SERVICIO = "NUEVO_SERVICIO"
-    CAMBIO_ABONO = "CAMBIO_ABONO"
-    CONSULTA_ADMINISTRATIVA = "CONSULTA_ADMINISTRATIVA"
-    FACTURACION = "FACTURACION"
+    ALTA_SERVICIO = "ALTA_SERVICIO"
+    BAJA_SERVICIO = "BAJA_SERVICIO"
 
 
 class Solicitud(Requerimiento):
-    """Pedido planificado de nuevo servicio, cambio de abono o consulta administrativa."""
+    """Pedido planificado de alta o baja de un servicio de la cooperativa."""
 
     def __init__(
         self,
@@ -28,14 +28,12 @@ class Solicitud(Requerimiento):
         descripcion: str,
         solicitante_id: uuid.UUID,
         categoria: CategoriaSolicitud,
-        fecha_limite: datetime,
-        impacto_estimado: str,
+        servicio: ServicioComunicarlos,
         id: uuid.UUID | None = None,
     ) -> None:
         super().__init__(titulo, descripcion, solicitante_id, id)
         self.categoria = self._validar_categoria(categoria)
-        self.fecha_limite = self._validar_fecha_limite(fecha_limite)
-        self.impacto_estimado = self._validar_impacto_estimado(impacto_estimado)
+        self.servicio = self._validar_servicio(servicio)
 
     @property
     def tipo(self) -> TipoRequerimiento:
@@ -55,8 +53,8 @@ class Solicitud(Requerimiento):
         nota_resolucion: str | None,
         historial: list[EventoRequerimiento],
         categoria: CategoriaSolicitud,
-        fecha_limite: datetime,
-        impacto_estimado: str,
+        servicio: ServicioComunicarlos,
+        comentarios: list[Comentario] | None = None,
     ) -> "Solicitud":
         """Reconstruye una `Solicitud` ya persistida (uso exclusivo de repositorios)."""
         instancia = cast(
@@ -71,11 +69,11 @@ class Solicitud(Requerimiento):
                 tecnico_asignado_id=tecnico_asignado_id,
                 nota_resolucion=nota_resolucion,
                 historial=historial,
+                comentarios=comentarios,
             ),
         )
         instancia.categoria = categoria
-        instancia.fecha_limite = fecha_limite
-        instancia.impacto_estimado = impacto_estimado
+        instancia.servicio = servicio
         return instancia
 
     @staticmethod
@@ -85,21 +83,7 @@ class Solicitud(Requerimiento):
         return categoria
 
     @staticmethod
-    def _validar_fecha_limite(fecha_limite: datetime) -> datetime:
-        if not isinstance(fecha_limite, datetime):
-            raise TypeError("La fecha límite debe ser una instancia de datetime.")
-        fecha_normalizada = (
-            fecha_limite if fecha_limite.tzinfo else fecha_limite.replace(tzinfo=UTC)
-        )
-        if fecha_normalizada <= datetime.now(UTC):
-            raise ValueError("La fecha límite debe ser posterior al momento actual.")
-        return fecha_normalizada
-
-    @staticmethod
-    def _validar_impacto_estimado(impacto_estimado: str) -> str:
-        if not isinstance(impacto_estimado, str):
-            raise TypeError("El impacto estimado debe ser una cadena de texto.")
-        impacto_normalizado = impacto_estimado.strip()
-        if not impacto_normalizado:
-            raise ValueError("El impacto estimado no puede estar vacío.")
-        return impacto_normalizado
+    def _validar_servicio(servicio: ServicioComunicarlos) -> ServicioComunicarlos:
+        if not isinstance(servicio, ServicioComunicarlos):
+            raise TypeError("El servicio debe ser una instancia de ServicioComunicarlos.")
+        return servicio

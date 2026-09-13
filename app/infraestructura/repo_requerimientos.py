@@ -24,10 +24,12 @@ from typing import Any, cast
 from pymongo.collection import Collection
 from pymongo.database import Database
 
+from app.compartido.dominio import ServicioComunicarlos
 from app.infraestructura.database import COLECCION_REQUERIMIENTOS
 from app.requerimientos.dominio.base import Requerimiento
+from app.requerimientos.dominio.comentario import Comentario
 from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerimiento
-from app.requerimientos.dominio.incidente import Incidente, Severidad
+from app.requerimientos.dominio.incidente import CategoriaIncidente, Incidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud, Solicitud
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
 from app.requerimientos.repositorio import RepositorioRequerimientos
@@ -81,6 +83,30 @@ def _documento_a_evento(
     )
 
 
+# -- Comentarios (subdocumento embebido, igual que el historial) --------------
+
+
+def _comentario_a_documento(comentario: Comentario) -> dict[str, Any]:
+    return {
+        "id": str(comentario.id),
+        "autor_id": str(comentario.autor_id),
+        "texto": comentario.texto,
+        "timestamp": comentario.timestamp,
+    }
+
+
+def _documento_a_comentario(
+    requerimiento_id: uuid.UUID, documento: dict[str, Any]
+) -> Comentario:
+    return Comentario(
+        id=uuid.UUID(documento["id"]),
+        requerimiento_id=requerimiento_id,
+        autor_id=uuid.UUID(documento["autor_id"]),
+        texto=documento["texto"],
+        timestamp=documento["timestamp"],
+    )
+
+
 # -- Campos comunes de la jerarquía Requerimiento ------------------------------
 
 
@@ -99,6 +125,9 @@ def _campos_comunes_a_documento(requerimiento: Requerimiento) -> dict[str, Any]:
         ),
         "nota_resolucion": requerimiento.nota_resolucion,
         "historial": [_evento_a_documento(evento) for evento in requerimiento.historial],
+        "comentarios": [
+            _comentario_a_documento(comentario) for comentario in requerimiento.comentarios
+        ],
     }
 
 
@@ -120,6 +149,10 @@ def _campos_comunes_desde_documento(documento: dict[str, Any]) -> dict[str, Any]
             _documento_a_evento(requerimiento_id, evento_doc)
             for evento_doc in documento["historial"]
         ],
+        "comentarios": [
+            _documento_a_comentario(requerimiento_id, comentario_doc)
+            for comentario_doc in documento.get("comentarios", [])
+        ],
     }
 
 
@@ -131,9 +164,10 @@ def _incidente_a_documento(requerimiento: Requerimiento) -> dict[str, Any]:
     documento = _campos_comunes_a_documento(incidente)
     documento.update(
         tipo=TipoRequerimiento.INCIDENTE.value,
-        severidad=incidente.severidad.value,
+        urgencia=incidente.urgencia.value,
+        categoria=incidente.categoria.value,
+        servicio=incidente.servicio.value,
         pasos_reproduccion=incidente.pasos_reproduccion,
-        servicio_afectado=incidente.servicio_afectado,
     )
     return documento
 
@@ -144,8 +178,7 @@ def _solicitud_a_documento(requerimiento: Requerimiento) -> dict[str, Any]:
     documento.update(
         tipo=TipoRequerimiento.SOLICITUD.value,
         categoria=solicitud.categoria.value,
-        fecha_limite=solicitud.fecha_limite,
-        impacto_estimado=solicitud.impacto_estimado,
+        servicio=solicitud.servicio.value,
     )
     return documento
 
@@ -153,9 +186,10 @@ def _solicitud_a_documento(requerimiento: Requerimiento) -> dict[str, Any]:
 def _documento_a_incidente(documento: dict[str, Any]) -> Requerimiento:
     return Incidente.reconstruir(
         **_campos_comunes_desde_documento(documento),
-        severidad=Severidad(documento["severidad"]),
+        urgencia=UrgenciaIncidente(documento["urgencia"]),
+        categoria=CategoriaIncidente(documento["categoria"]),
+        servicio=ServicioComunicarlos(documento["servicio"]),
         pasos_reproduccion=documento["pasos_reproduccion"],
-        servicio_afectado=documento["servicio_afectado"],
     )
 
 
@@ -163,8 +197,7 @@ def _documento_a_solicitud(documento: dict[str, Any]) -> Requerimiento:
     return Solicitud.reconstruir(
         **_campos_comunes_desde_documento(documento),
         categoria=CategoriaSolicitud(documento["categoria"]),
-        fecha_limite=documento["fecha_limite"],
-        impacto_estimado=documento["impacto_estimado"],
+        servicio=ServicioComunicarlos(documento["servicio"]),
     )
 
 

@@ -8,13 +8,15 @@ inicializar este paquete. Impórtalo directo:
 """
 
 from app.requerimientos.dominio import (
+    CategoriaIncidente,
     CategoriaSolicitud,
+    Comentario,
     EstadoRequerimiento,
     Incidente,
     Requerimiento,
-    Severidad,
     Solicitud,
     TipoRequerimiento,
+    UrgenciaIncidente,
 )
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
 from app.requerimientos.excepciones import (
@@ -30,11 +32,13 @@ from app.requerimientos.repositorio import RepositorioRequerimientos
 
 __all__ = [
     "Requerimiento",
+    "Comentario",
     "Incidente",
     "Solicitud",
     "EstadoRequerimiento",
     "TipoRequerimiento",
-    "Severidad",
+    "UrgenciaIncidente",
+    "CategoriaIncidente",
     "CategoriaSolicitud",
     "EventoRequerimiento",
     "TipoEventoRequerimiento",

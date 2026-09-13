@@ -17,9 +17,10 @@ from typing import Any
 from app.compartido.dominio import RolUsuario
 from app.notificaciones.despachador import DespachadorEventos
 from app.requerimientos.dominio.base import Requerimiento
+from app.requerimientos.dominio.comentario import Comentario
 from app.requerimientos.dominio.estados import TipoRequerimiento
 from app.requerimientos.eventos import EventoRequerimiento
-from app.requerimientos.excepciones import RequerimientoNoEncontradoError
+from app.requerimientos.excepciones import PermisoDenegadoError, RequerimientoNoEncontradoError
 from app.requerimientos.fabrica import FabricaRequerimientos
 from app.requerimientos.repositorio import RepositorioRequerimientos
 
@@ -43,6 +44,26 @@ class ServicioRequerimientos:
 
     def obtener_por_id(self, requerimiento_id: uuid.UUID) -> Requerimiento | None:
         return self._repositorio.buscar_por_id(requerimiento_id)
+
+    def obtener_visible_para(
+        self, requerimiento_id: uuid.UUID, rol_actor: RolUsuario, solicitante_id: uuid.UUID
+    ) -> Requerimiento:
+        """Busca un requerimiento aplicando la misma regla de visibilidad que
+        `listar_visibles_para`: un Solicitante no puede consultar un ticket ajeno.
+
+        Centraliza acá el chequeo de propiedad para que el router no lo
+        duplique (fix de seguridad: antes `GET /requerimientos/{id}` no
+        exigía ni autenticación ni propiedad).
+        """
+        requerimiento = self._buscar_o_lanzar(requerimiento_id)
+        es_ajeno = (
+            rol_actor == RolUsuario.SOLICITANTE and requerimiento.solicitante_id != solicitante_id
+        )
+        if es_ajeno:
+            raise PermisoDenegadoError(
+                "El Solicitante no puede consultar un requerimiento ajeno."
+            )
+        return requerimiento
 
     def listar_visibles_para(
         self, rol_actor: RolUsuario, solicitante_id: uuid.UUID
@@ -102,6 +123,44 @@ class ServicioRequerimientos:
             requerimiento_id, lambda req: req.cancelar(autor_id, rol_actor)
         )
 
+    def agregar_comentario(
+        self, requerimiento_id: uuid.UUID, texto: str, autor_id: uuid.UUID, rol_actor: RolUsuario
+    ) -> Comentario:
+        """Agrega el comentario y despacha el/los eventos que haya generado.
+
+        `agregar_comentario` de la entidad puede registrar UN evento
+        (`COMENTARIO`) o DOS (`COMENTARIO` + `REAPERTURA`, si reabre un
+        `RESUELTO`): se despachan todos los eventos nuevos del historial,
+        no solo el último.
+        """
+        requerimiento = self._buscar_o_lanzar(requerimiento_id)
+        cantidad_previa = len(requerimiento.historial)
+        comentario = requerimiento.agregar_comentario(texto, autor_id, rol_actor)
+        self._repositorio.guardar(requerimiento)
+        for evento_nuevo in requerimiento.historial[cantidad_previa:]:
+            self._despachador.notificar(evento_nuevo)
+        return comentario
+
+    def derivar_interconsulta(
+        self,
+        requerimiento_id: uuid.UUID,
+        tecnico_destino_id: uuid.UUID,
+        autor_id: uuid.UUID,
+        rol_actor: RolUsuario,
+    ) -> Requerimiento:
+        return self._aplicar_transicion(
+            requerimiento_id,
+            lambda req: req.derivar_interconsulta(tecnico_destino_id, autor_id, rol_actor),
+        )
+
+    def _buscar_o_lanzar(self, requerimiento_id: uuid.UUID) -> Requerimiento:
+        requerimiento = self._repositorio.buscar_por_id(requerimiento_id)
+        if requerimiento is None:
+            raise RequerimientoNoEncontradoError(
+                f"No existe un requerimiento con id '{requerimiento_id}'."
+            )
+        return requerimiento
+
     def _aplicar_transicion(
         self,
         requerimiento_id: uuid.UUID,
@@ -113,11 +172,7 @@ class ServicioRequerimientos:
         Expert): si viola una invariante de estado o de permisos, su propia
         excepción de dominio sube sin que el servicio la intercepte.
         """
-        requerimiento = self._repositorio.buscar_por_id(requerimiento_id)
-        if requerimiento is None:
-            raise RequerimientoNoEncontradoError(
-                f"No existe un requerimiento con id '{requerimiento_id}'."
-            )
+        requerimiento = self._buscar_o_lanzar(requerimiento_id)
         evento = transicion(requerimiento)
         self._repositorio.guardar(requerimiento)
         self._despachador.notificar(evento)

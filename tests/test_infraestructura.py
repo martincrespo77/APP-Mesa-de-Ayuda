@@ -9,7 +9,7 @@ documentos BSON.
 
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 import mongomock
@@ -20,7 +20,7 @@ from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.infraestructura.repo_requerimientos import RepositorioRequerimientosMongo
 from app.infraestructura.repo_usuarios import RepositorioUsuariosMongo
 from app.requerimientos.dominio.estados import EstadoRequerimiento
-from app.requerimientos.dominio.incidente import Incidente, Severidad
+from app.requerimientos.dominio.incidente import CategoriaIncidente, Incidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud, Solicitud
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
 from app.usuarios.dominio import Usuario
@@ -183,9 +183,10 @@ def incidente(solicitante_id: uuid.UUID) -> Incidente:
         titulo="Corte de fibra troncal",
         descripcion="Sin conectividad en el barrio Centro.",
         solicitante_id=solicitante_id,
-        severidad=Severidad.CRITICA,
+        urgencia=UrgenciaIncidente.CRITICO,
+        categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+        servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         pasos_reproduccion="Verificar ONT sin luz de señal.",
-        servicio_afectado="Fibra óptica residencial",
     )
 
 
@@ -203,9 +204,10 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
         assert encontrado.id == incidente.id
         assert encontrado.titulo == incidente.titulo
         assert encontrado.estado == EstadoRequerimiento.ABIERTO
-        assert encontrado.severidad == Severidad.CRITICA
+        assert encontrado.urgencia == UrgenciaIncidente.CRITICO
+        assert encontrado.categoria == CategoriaIncidente.SERVICIO_INACCESIBLE
+        assert encontrado.servicio == ServicioComunicarlos.INTERNET_BANDA_ANCHA
         assert encontrado.pasos_reproduccion == incidente.pasos_reproduccion
-        assert encontrado.servicio_afectado == incidente.servicio_afectado
         assert len(encontrado.historial) == 1
         assert encontrado.historial[0].id == incidente.historial[0].id
         assert encontrado.historial[0].tipo_evento == TipoEventoRequerimiento.CREACION
@@ -214,14 +216,12 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
         self, repo_requerimientos: RepositorioRequerimientosMongo, solicitante_id: uuid.UUID
     ) -> None:
         # Arrange
-        fecha_limite = datetime.now(UTC) + timedelta(days=5)
         solicitud = Solicitud(
             titulo="Alta de nuevo abono",
             descripcion="Cliente solicita nueva conexión.",
             solicitante_id=solicitante_id,
-            categoria=CategoriaSolicitud.NUEVO_SERVICIO,
-            fecha_limite=fecha_limite,
-            impacto_estimado="Bajo",
+            categoria=CategoriaSolicitud.ALTA_SERVICIO,
+            servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         )
 
         # Act
@@ -230,8 +230,8 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
 
         # Assert
         assert isinstance(encontrada, Solicitud)
-        assert encontrada.categoria == CategoriaSolicitud.NUEVO_SERVICIO
-        assert encontrada.impacto_estimado == "Bajo"
+        assert encontrada.categoria == CategoriaSolicitud.ALTA_SERVICIO
+        assert encontrada.servicio == ServicioComunicarlos.INTERNET_BANDA_ANCHA
 
     def test_buscar_por_id_inexistente_devuelve_none(
         self, repo_requerimientos: RepositorioRequerimientosMongo
@@ -292,9 +292,8 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
             titulo="Cambio de abono",
             descripcion="Upgrade a plan superior.",
             solicitante_id=solicitante_id,
-            categoria=CategoriaSolicitud.CAMBIO_ABONO,
-            fecha_limite=datetime.now(UTC) + timedelta(days=2),
-            impacto_estimado="Medio",
+            categoria=CategoriaSolicitud.BAJA_SERVICIO,
+            servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
         )
         repo_requerimientos.guardar(incidente)
         repo_requerimientos.guardar(solicitud)
@@ -317,9 +316,10 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
             titulo="Otro corte",
             descripcion="Otro barrio.",
             solicitante_id=otro_solicitante_id,
-            severidad=Severidad.BAJA,
+            urgencia=UrgenciaIncidente.MENOR,
+            categoria=CategoriaIncidente.BLOQUEO_SIM,
+            servicio=ServicioComunicarlos.TELEVISION,
             pasos_reproduccion="p",
-            servicio_afectado="TV",
         )
         repo_requerimientos.guardar(incidente)
         repo_requerimientos.guardar(otro_incidente)
@@ -349,6 +349,27 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
             e for e in encontrado.historial if e.tipo_evento == TipoEventoRequerimiento.CREACION
         ]
         assert len(eventos_creacion) == 1
+
+    def test_guardar_y_buscar_conserva_comentarios(
+        self,
+        repo_requerimientos: RepositorioRequerimientosMongo,
+        incidente: Incidente,
+        solicitante_id: uuid.UUID,
+    ) -> None:
+        # Arrange
+        incidente.agregar_comentario(
+            "¿Alguna novedad?", autor_id=solicitante_id, rol_actor=RolUsuario.SOLICITANTE
+        )
+
+        # Act
+        repo_requerimientos.guardar(incidente)
+        encontrado = repo_requerimientos.buscar_por_id(incidente.id)
+
+        # Assert
+        assert encontrado is not None
+        assert len(encontrado.comentarios) == 1
+        assert encontrado.comentarios[0].texto == "¿Alguna novedad?"
+        assert encontrado.comentarios[0].autor_id == solicitante_id
 
     def test_evento_reconstruido_preserva_autor_y_detalle_originales(
         self, repo_requerimientos: RepositorioRequerimientosMongo, incidente: Incidente

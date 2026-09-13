@@ -14,8 +14,9 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.compartido.dominio import ServicioComunicarlos
 from app.requerimientos.dominio.estados import EstadoRequerimiento
-from app.requerimientos.dominio.incidente import Severidad
+from app.requerimientos.dominio.incidente import CategoriaIncidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud
 from app.requerimientos.eventos import TipoEventoRequerimiento
 
@@ -26,9 +27,10 @@ class CrearIncidenteRequest(BaseModel):
     tipo: Literal["INCIDENTE"] = "INCIDENTE"
     titulo: str = Field(min_length=1)
     descripcion: str = Field(min_length=1)
-    severidad: Severidad
+    urgencia: UrgenciaIncidente
+    categoria: CategoriaIncidente
+    servicio: ServicioComunicarlos
     pasos_reproduccion: str = Field(min_length=1)
-    servicio_afectado: str = Field(min_length=1)
 
 
 class CrearSolicitudRequest(BaseModel):
@@ -36,8 +38,7 @@ class CrearSolicitudRequest(BaseModel):
     titulo: str = Field(min_length=1)
     descripcion: str = Field(min_length=1)
     categoria: CategoriaSolicitud
-    fecha_limite: datetime
-    impacto_estimado: str = Field(min_length=1)
+    servicio: ServicioComunicarlos
 
 
 CrearRequerimientoRequest = Annotated[
@@ -56,6 +57,14 @@ class ResolverRequest(BaseModel):
     nota_resolucion: str = Field(min_length=1)
 
 
+class AgregarComentarioRequest(BaseModel):
+    texto: str = Field(min_length=1)
+
+
+class DerivarInterconsultaRequest(BaseModel):
+    tecnico_destino_id: uuid.UUID
+
+
 # -- Responses -----------------------------------------------------------------
 
 
@@ -71,6 +80,18 @@ class EventoResponse(BaseModel):
     timestamp: datetime
 
 
+class ComentarioResponse(BaseModel):
+    """Un comentario de seguimiento sobre un requerimiento."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    requerimiento_id: uuid.UUID
+    autor_id: uuid.UUID
+    texto: str
+    timestamp: datetime
+
+
 class _RequerimientoResponseBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -83,20 +104,21 @@ class _RequerimientoResponseBase(BaseModel):
     tecnico_asignado_id: uuid.UUID | None
     nota_resolucion: str | None
     historial: list[EventoResponse]
+    comentarios: list[ComentarioResponse]
 
 
 class IncidenteResponse(_RequerimientoResponseBase):
     tipo: Literal["INCIDENTE"] = "INCIDENTE"
-    severidad: Severidad
+    urgencia: UrgenciaIncidente
+    categoria: CategoriaIncidente
+    servicio: ServicioComunicarlos
     pasos_reproduccion: str
-    servicio_afectado: str
 
 
 class SolicitudResponse(_RequerimientoResponseBase):
     tipo: Literal["SOLICITUD"] = "SOLICITUD"
     categoria: CategoriaSolicitud
-    fecha_limite: datetime
-    impacto_estimado: str
+    servicio: ServicioComunicarlos
 
 
 RequerimientoResponse = Annotated[

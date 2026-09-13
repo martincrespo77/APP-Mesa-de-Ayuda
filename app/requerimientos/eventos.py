@@ -21,6 +21,9 @@ class TipoEventoRequerimiento(StrEnum):
     RESOLUCION = "RESOLUCION"
     CIERRE = "CIERRE"
     CANCELACION = "CANCELACION"
+    COMENTARIO = "COMENTARIO"
+    DERIVACION = "DERIVACION"
+    REAPERTURA = "REAPERTURA"
 
 
 @dataclass(frozen=True)
