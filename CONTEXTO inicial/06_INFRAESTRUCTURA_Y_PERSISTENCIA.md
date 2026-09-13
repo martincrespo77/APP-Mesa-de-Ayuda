@@ -23,10 +23,12 @@ La capa de infraestructura (`app/infraestructura/`) se comunica con MongoDB a tr
 
 | Colección | Documento Clave | Índices Críticos |
 |---|---|---|
-| `usuarios` | Datos de perfil, rol y password hash | `email` (único) |
-| `requerimientos` | Incidentes y solicitudes serializados | `id` (único), `solicitante_id`, `estado`, `tipo` |
-| `eventos` | Auditoría inmutable de cambios de estado | `requerimiento_id`, `timestamp` |
-| `notificaciones` | Registro de avisos y alertas | `id`, `fecha_creacion` |
+| `usuarios` | Perfil, rol, password hash, `servicios_suscriptos`, `fecha_creacion`/`ultimo_acceso` | `email` (único) |
+| `requerimientos` | Incidentes y solicitudes serializados, con `historial` y `comentarios` embebidos (ver abajo) | `_id` (único), `solicitante_id`, `estado`, `tipo` |
+| `supervisiones` | Relación N:M `supervisor_id`/`supervisado_id` | `supervisor_id`, `supervisado_id` |
+| `notificaciones` | `supervisor_id`, `empleado_supervisado_id`, `requerimiento_id`, `tipo_evento`, `detalle`, `leida` | `supervisor_id` |
+
+> **No existe una colección `eventos` separada**: el historial de auditoría (`EventoRequerimiento`) y los comentarios (`Comentario`) se embeben como subdocumentos dentro del propio documento de `requerimientos` — no hay ningún caso de uso que necesite leerlos de forma independiente de su ticket (ver docstring de `repo_requerimientos.py`).
 
 ---
 

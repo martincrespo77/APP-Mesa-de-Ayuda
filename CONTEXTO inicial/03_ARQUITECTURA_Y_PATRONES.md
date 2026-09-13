@@ -50,13 +50,15 @@ class RepositorioRequerimientos(ABC):
 El dominio emite eventos ante cambios relevantes sin saber quién los escucha:
 
 ```python
-# app/notificaciones/dominio.py
+# app/notificaciones/despachador.py
 class DespachadorEventos:
     def suscribir(self, observador: ObservadorRequerimiento) -> None: ...
     def notificar(self, evento: EventoRequerimiento) -> None: ...
 ```
 
-### C. Shared Kernel Mínimo (`RolUsuario`)
+> **Nota**: `DespachadorEventos` se construye **por request** (`app/deps.py`), no como singleton de módulo: el observer `ObservadorNotificacionesMongo` (genera una `Notificacion` real por cada supervisor de un empleado que generó el evento) necesita el `db` de la request actual para consultar `RepositorioSupervision`. Sigue siendo el mismo patrón Observer — solo cambia el scope de vida del Sujeto, que nunca lo exige singleton.
+
+### C. Shared Kernel Mínimo (`RolUsuario`, `ServicioComunicarlos`)
 Para evitar importaciones circulares entre `usuarios` y `requerimientos`, los tipos comunes del negocio se centralizan en `app/compartido/dominio.py`.
 
 ---

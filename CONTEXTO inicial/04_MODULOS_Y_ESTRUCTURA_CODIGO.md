@@ -9,10 +9,11 @@
 ```
 .
 ├── app/                        # Núcleo del Backend (FastAPI + Dominio)
-│   ├── compartido/             # Shared Kernel (RolUsuario)
+│   ├── compartido/             # Shared Kernel (RolUsuario, ServicioComunicarlos)
 │   ├── usuarios/               # Módulo de Usuarios y Autenticación
 │   ├── requerimientos/         # Módulo de Incidentes y Solicitudes
-│   ├── notificaciones/         # Patrón Observer y eventos
+│   ├── supervision/            # Relación N:M Supervisor <-> Operador/Técnico
+│   ├── notificaciones/         # Patrón Observer + entidad Notificacion persistida
 │   ├── infraestructura/        # Conectores PyMongo y Repositorios
 │   ├── auth.py                 # Lógica JWT y hashing bcrypt
 │   ├── config.py               # Configuración tipada (.env)
@@ -44,6 +45,8 @@ Cada módulo funcional dentro de `app/` (`usuarios/`, `requerimientos/`) respeta
 | `servicios.py` | Aplicación | Orquestación de casos de uso (crear, asignar, resolver, emitir eventos). |
 | `schemas.py` | Presentación | Modelos Pydantic v2 para serializar/deserializar requests y responses JSON. |
 | `router.py` | Presentación | Endpoints FastAPI (`@router.post`, etc.), códigos HTTP y uso de `deps.py`. |
+
+`supervision/` y `notificaciones/` (a partir de la entidad `Notificacion` persistida) siguen el mismo patrón de 6 archivos. `requerimientos/dominio/` es un subpaquete (una entidad por archivo): `base.py`, `incidente.py`, `solicitud.py`, `comentario.py`, `estados.py`.
 
 ---
 
