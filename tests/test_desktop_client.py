@@ -203,6 +203,66 @@ class TestApiClienteHttpRequerimientos:
         assert len(requerimientos) == 1
         assert requerimientos[0].estado == EstadoRequerimiento.ABIERTO
 
+    def test_historial_con_eventos_de_comentario_derivacion_y_reapertura(self) -> None:
+        """Regresión: un ticket con comentarios/derivación (solo API, sin UI en
+        desktop/) igual aparece en su `historial` y no debe romper el parseo,
+        aunque el cliente no tenga pantallas para generarlos."""
+
+        # Arrange
+        def _handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "POST" and request.url.path == "/usuarios/login":
+                return httpx.Response(
+                    200, json={"access_token": _token_de_prueba(), "token_type": "bearer"}
+                )
+            if request.method == "GET" and request.url.path == "/usuarios/me":
+                return httpx.Response(200, json=_perfil_json())
+            if request.method == "GET" and request.url.path == "/requerimientos":
+                return httpx.Response(
+                    200,
+                    json=[
+                        _requerimiento_json(
+                            historial=[
+                                {
+                                    "id": str(uuid.uuid4()),
+                                    "tipo_evento": "COMENTARIO",
+                                    "autor_id": str(_USUARIO_ID),
+                                    "detalle": "Un comentario.",
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                },
+                                {
+                                    "id": str(uuid.uuid4()),
+                                    "tipo_evento": "DERIVACION",
+                                    "autor_id": str(_USUARIO_ID),
+                                    "detalle": "Derivado a otro técnico.",
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                },
+                                {
+                                    "id": str(uuid.uuid4()),
+                                    "tipo_evento": "REAPERTURA",
+                                    "autor_id": str(_USUARIO_ID),
+                                    "detalle": "Reabierto.",
+                                    "timestamp": datetime.now(UTC).isoformat(),
+                                },
+                            ]
+                        )
+                    ],
+                )
+            raise AssertionError(f"Ruta no simulada: {request.method} {request.url.path}")
+
+        cliente = ApiClienteHttp(
+            cliente_http=httpx.Client(
+                base_url="http://testserver", transport=httpx.MockTransport(_handler)
+            )
+        )
+        cliente.iniciar_sesion(_EMAIL_VALIDO, _PASSWORD_VALIDA)
+
+        # Act
+        requerimientos = cliente.listar_requerimientos()
+
+        # Assert
+        tipos = [e.tipo_evento.value for e in requerimientos[0].historial]
+        assert tipos == ["COMENTARIO", "DERIVACION", "REAPERTURA"]
+
     def test_crear_incidente_envia_datos_y_parsea_la_respuesta(
         self, cliente: ApiClienteHttp
     ) -> None:

@@ -45,6 +45,9 @@ const ETIQUETAS_EVENTO = {
     RESOLUCION: "Resolución",
     CIERRE: "Cierre",
     CANCELACION: "Cancelación",
+    COMENTARIO: "Comentario",
+    DERIVACION: "Derivación a otro técnico",
+    REAPERTURA: "Reapertura",
 };
 
 function formatearFecha(iso) {
