@@ -16,7 +16,7 @@ import mongomock
 import pytest
 from pymongo.database import Database
 
-from app.compartido.dominio import RolUsuario
+from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.infraestructura.repo_requerimientos import RepositorioRequerimientosMongo
 from app.infraestructura.repo_usuarios import RepositorioUsuariosMongo
 from app.requerimientos.dominio.estados import EstadoRequerimiento
@@ -24,6 +24,11 @@ from app.requerimientos.dominio.incidente import Incidente, Severidad
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud, Solicitud
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
 from app.usuarios.dominio import Usuario
+
+
+def _a_milisegundos(momento: datetime) -> datetime:
+    """BSON solo guarda milisegundos: trunca para comparar contra el valor leído."""
+    return momento.replace(microsecond=(momento.microsecond // 1000) * 1000)
 
 
 @pytest.fixture
@@ -71,6 +76,33 @@ class TestRepositorioUsuariosMongoGuardarYBuscar:
         assert encontrado.password_hash == usuario.password_hash
         assert encontrado.rol == usuario.rol
         assert encontrado.activo == usuario.activo
+        assert encontrado.fecha_creacion == _a_milisegundos(usuario.fecha_creacion)
+        assert encontrado.ultimo_acceso == usuario.ultimo_acceso
+
+    def test_guardar_y_buscar_conserva_servicios_suscriptos_y_ultimo_acceso(
+        self, repo_usuarios: RepositorioUsuariosMongo
+    ) -> None:
+        # Arrange
+        solicitante = Usuario(
+            nombre_completo="Sol",
+            email="sol@gmail.com",
+            password_hash="hash",
+            rol=RolUsuario.SOLICITANTE,
+            servicios_suscriptos=frozenset(
+                {ServicioComunicarlos.TELEFONIA_CELULAR, ServicioComunicarlos.TELEVISION}
+            ),
+        )
+        solicitante.registrar_acceso()
+
+        # Act
+        repo_usuarios.guardar(solicitante)
+        encontrado = repo_usuarios.buscar_por_id(solicitante.id)
+
+        # Assert
+        assert encontrado is not None
+        assert encontrado.servicios_suscriptos == solicitante.servicios_suscriptos
+        assert solicitante.ultimo_acceso is not None
+        assert encontrado.ultimo_acceso == _a_milisegundos(solicitante.ultimo_acceso)
 
     def test_buscar_por_id_inexistente_devuelve_none(
         self, repo_usuarios: RepositorioUsuariosMongo
@@ -122,6 +154,7 @@ class TestRepositorioUsuariosMongoGuardarYBuscar:
             email="a@comunicarlos.com",
             password_hash="hash-a",
             rol=RolUsuario.SOLICITANTE,
+            servicios_suscriptos=frozenset({ServicioComunicarlos.TELEVISION}),
         )
         usuario_b = Usuario(
             nombre_completo="B",

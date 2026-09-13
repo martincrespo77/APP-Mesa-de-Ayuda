@@ -232,12 +232,34 @@ class TestCrearUsuario:
                 "email": "nuevo@gmail.com",
                 "password": "clave12345",
                 "rol": "SOLICITANTE",
+                "servicios_suscriptos": ["TELEVISION"],
             },
             headers=_headers(token),
         )
 
         # Assert
         assert respuesta.status_code == 201
+
+    def test_solicitante_sin_servicios_suscriptos_devuelve_400(
+        self, cliente: TestClient, supervisor: Usuario
+    ) -> None:
+        # Arrange
+        token = _token_de(cliente, "sofia@comunicarlos.com.ar", _PASSWORD_SUPERVISOR)
+
+        # Act: el Solicitante debe suscribirse a al menos un servicio
+        respuesta = cliente.post(
+            "/usuarios",
+            json={
+                "nombre_completo": "x",
+                "email": "nuevo@gmail.com",
+                "password": "clave12345",
+                "rol": "SOLICITANTE",
+            },
+            headers=_headers(token),
+        )
+
+        # Assert
+        assert respuesta.status_code == 400
 
 
 class TestAdministracionDeUsuarios:

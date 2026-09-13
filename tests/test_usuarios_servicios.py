@@ -4,14 +4,22 @@ import uuid
 
 import pytest
 
-from app.compartido.dominio import RolUsuario
+from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.usuarios.excepciones import (
+    CredencialesInvalidasError,
     EmailCorporativoRequeridoError,
     EmailYaRegistradoError,
     UsuarioNoEncontradoError,
 )
 from app.usuarios.servicios import ServicioUsuarios
 from tests.fakes import FakeRepositorioUsuarios
+
+_UN_SERVICIO = frozenset({ServicioComunicarlos.TELEVISION})
+
+
+def _verificador_fake(password: str, password_hash: str) -> bool:
+    """Simula bcrypt: el hash de una contraseña es `hash-de-<password>`."""
+    return password_hash == f"hash-de-{password}"
 
 
 @pytest.fixture
@@ -21,7 +29,7 @@ def repositorio() -> FakeRepositorioUsuarios:
 
 @pytest.fixture
 def servicio(repositorio: FakeRepositorioUsuarios) -> ServicioUsuarios:
-    return ServicioUsuarios(repositorio)
+    return ServicioUsuarios(repositorio, _verificador_fake)
 
 
 class TestRegistrar:
@@ -57,7 +65,13 @@ class TestRegistrar:
         self, servicio: ServicioUsuarios
     ) -> None:
         # Act
-        usuario = servicio.registrar("Ana Pérez", "ana@gmail.com", "hash", RolUsuario.SOLICITANTE)
+        usuario = servicio.registrar(
+            "Ana Pérez",
+            "ana@gmail.com",
+            "hash",
+            RolUsuario.SOLICITANTE,
+            servicios_suscriptos=_UN_SERVICIO,
+        )
 
         # Assert
         assert usuario.email == "ana@gmail.com"
@@ -114,3 +128,50 @@ class TestAdministracion:
 
         # Assert
         assert repositorio.buscar_por_id(usuario.id).rol == RolUsuario.SUPERVISOR  # type: ignore[union-attr]
+
+
+class TestAutenticar:
+    def test_autenticar_con_credenciales_validas_registra_el_acceso(
+        self, servicio: ServicioUsuarios, repositorio: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange
+        registrado = servicio.registrar(
+            "Ana", "ana@comunicarlos.com.ar", "hash-de-secreta123", RolUsuario.OPERADOR
+        )
+        assert registrado.ultimo_acceso is None
+
+        # Act
+        autenticado = servicio.autenticar("ana@comunicarlos.com.ar", "secreta123")
+
+        # Assert
+        assert autenticado.id == registrado.id
+        assert autenticado.ultimo_acceso is not None
+        assert repositorio.buscar_por_id(registrado.id).ultimo_acceso is not None  # type: ignore[union-attr]
+
+    def test_autenticar_con_password_incorrecta_lanza_error(
+        self, servicio: ServicioUsuarios
+    ) -> None:
+        # Arrange
+        servicio.registrar(
+            "Ana", "ana@comunicarlos.com.ar", "hash-de-secreta123", RolUsuario.OPERADOR
+        )
+
+        # Act & Assert
+        with pytest.raises(CredencialesInvalidasError):
+            servicio.autenticar("ana@comunicarlos.com.ar", "incorrecta")
+
+    def test_autenticar_email_inexistente_lanza_error(self, servicio: ServicioUsuarios) -> None:
+        # Act & Assert
+        with pytest.raises(CredencialesInvalidasError):
+            servicio.autenticar("nadie@comunicarlos.com.ar", "cualquiera")
+
+    def test_autenticar_usuario_inactivo_lanza_error(self, servicio: ServicioUsuarios) -> None:
+        # Arrange
+        usuario = servicio.registrar(
+            "Ana", "ana@comunicarlos.com.ar", "hash-de-secreta123", RolUsuario.OPERADOR
+        )
+        servicio.desactivar(usuario.id)
+
+        # Act & Assert
+        with pytest.raises(CredencialesInvalidasError):
+            servicio.autenticar("ana@comunicarlos.com.ar", "secreta123")

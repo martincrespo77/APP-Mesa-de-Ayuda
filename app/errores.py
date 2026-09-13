@@ -17,6 +17,7 @@ from app.requerimientos.excepciones import (
     TransicionInvalidaError,
 )
 from app.usuarios.excepciones import (
+    CredencialesInvalidasError,
     EmailYaRegistradoError,
     UsuarioNoEncontradoError,
     UsuarioYaActivoError,
@@ -33,6 +34,7 @@ _CODIGOS_HTTP: dict[type[DominioError], int] = {
     EmailYaRegistradoError: status.HTTP_409_CONFLICT,
     UsuarioYaActivoError: status.HTTP_409_CONFLICT,
     UsuarioYaInactivoError: status.HTTP_409_CONFLICT,
+    CredencialesInvalidasError: status.HTTP_401_UNAUTHORIZED,
 }
 
 

@@ -20,7 +20,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from app.auth import obtener_password_hash
-from app.compartido.dominio import RolUsuario
+from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.config import get_settings
 from app.infraestructura.database import crear_cliente_mongo, crear_indices, obtener_base_datos
 from app.infraestructura.repo_requerimientos import RepositorioRequerimientosMongo
@@ -41,12 +41,42 @@ def _id(clave: str) -> uuid.UUID:
 def _crear_usuarios() -> dict[str, Usuario]:
     """Un usuario por cada uno de los 4 roles, más un segundo solicitante."""
     password_hash = obtener_password_hash(_PASSWORD_SEED)
-    datos = (
-        ("solicitante1", "Lucía Gómez", "lucia.gomez@comunicarlos.com", RolUsuario.SOLICITANTE),
-        ("solicitante2", "Marcos Díaz", "marcos.diaz@comunicarlos.com", RolUsuario.SOLICITANTE),
-        ("operador1", "Rosa Molina", "rosa.molina@comunicarlos.com.ar", RolUsuario.OPERADOR),
-        ("tecnico1", "Iván Ríos", "ivan.rios@comunicarlos.com.ar", RolUsuario.TECNICO),
-        ("supervisor1", "Sofía Jefa", "sofia.jefa@comunicarlos.com.ar", RolUsuario.SUPERVISOR),
+    datos: tuple[tuple[str, str, str, RolUsuario, frozenset[ServicioComunicarlos]], ...] = (
+        (
+            "solicitante1",
+            "Lucía Gómez",
+            "lucia.gomez@comunicarlos.com",
+            RolUsuario.SOLICITANTE,
+            frozenset({ServicioComunicarlos.INTERNET_BANDA_ANCHA, ServicioComunicarlos.TELEVISION}),
+        ),
+        (
+            "solicitante2",
+            "Marcos Díaz",
+            "marcos.diaz@comunicarlos.com",
+            RolUsuario.SOLICITANTE,
+            frozenset({ServicioComunicarlos.TELEFONIA_CELULAR}),
+        ),
+        (
+            "operador1",
+            "Rosa Molina",
+            "rosa.molina@comunicarlos.com.ar",
+            RolUsuario.OPERADOR,
+            frozenset(),
+        ),
+        (
+            "tecnico1",
+            "Iván Ríos",
+            "ivan.rios@comunicarlos.com.ar",
+            RolUsuario.TECNICO,
+            frozenset(),
+        ),
+        (
+            "supervisor1",
+            "Sofía Jefa",
+            "sofia.jefa@comunicarlos.com.ar",
+            RolUsuario.SUPERVISOR,
+            frozenset(),
+        ),
     )
     return {
         clave: Usuario(
@@ -55,8 +85,9 @@ def _crear_usuarios() -> dict[str, Usuario]:
             email=email,
             password_hash=password_hash,
             rol=rol,
+            servicios_suscriptos=servicios,
         )
-        for clave, nombre, email, rol in datos
+        for clave, nombre, email, rol, servicios in datos
     }
 
 

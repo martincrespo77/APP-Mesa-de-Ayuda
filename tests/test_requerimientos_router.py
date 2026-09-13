@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import obtener_password_hash
-from app.compartido.dominio import RolUsuario
+from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.deps import obtener_repositorio_requerimientos, obtener_repositorio_usuarios
 from app.main import app
 from app.usuarios.dominio import Usuario
@@ -48,7 +48,18 @@ def cliente(
 
 
 def _crear_usuario(repo: FakeRepositorioUsuarios, email: str, rol: RolUsuario) -> Usuario:
-    usuario = Usuario(email.split("@")[0], email, obtener_password_hash(_PASSWORD), rol)
+    servicios = (
+        frozenset({ServicioComunicarlos.INTERNET_BANDA_ANCHA})
+        if rol == RolUsuario.SOLICITANTE
+        else frozenset()
+    )
+    usuario = Usuario(
+        email.split("@")[0],
+        email,
+        obtener_password_hash(_PASSWORD),
+        rol,
+        servicios_suscriptos=servicios,
+    )
     repo.guardar(usuario)
     return usuario
 

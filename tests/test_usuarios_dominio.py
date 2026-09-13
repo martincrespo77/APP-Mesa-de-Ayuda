@@ -1,16 +1,20 @@
 """Tests de dominio del módulo `app/usuarios/` (entidad `Usuario`)."""
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 
-from app.compartido.dominio import RolUsuario
+from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.usuarios.dominio import Usuario
 from app.usuarios.excepciones import (
     EmailCorporativoRequeridoError,
+    SuscripcionRequeridaError,
     UsuarioYaActivoError,
     UsuarioYaInactivoError,
 )
+
+_UN_SERVICIO = frozenset({ServicioComunicarlos.INTERNET_BANDA_ANCHA})
 
 
 @pytest.fixture
@@ -66,7 +70,13 @@ class TestCreacionDeUsuario:
 
     def test_solicitante_acepta_cualquier_dominio_de_email(self) -> None:
         # Act: el Solicitante no está sujeto a la restricción de dominio corporativo
-        usuario = Usuario("Ana", "ana@gmail.com", "hash", RolUsuario.SOLICITANTE)
+        usuario = Usuario(
+            "Ana",
+            "ana@gmail.com",
+            "hash",
+            RolUsuario.SOLICITANTE,
+            servicios_suscriptos=_UN_SERVICIO,
+        )
 
         # Assert
         assert usuario.email == "ana@gmail.com"
@@ -114,10 +124,31 @@ class TestCambiosDeRolYPassword:
 
     def test_ascender_solicitante_con_email_no_corporativo_lanza_error(self) -> None:
         # Arrange: Solicitante con email personal, válido para su rol actual
-        solicitante = Usuario("Ana", "ana@gmail.com", "hash", RolUsuario.SOLICITANTE)
+        solicitante = Usuario(
+            "Ana",
+            "ana@gmail.com",
+            "hash",
+            RolUsuario.SOLICITANTE,
+            servicios_suscriptos=_UN_SERVICIO,
+        )
 
         # Act & Assert: no puede pasar a Operador sin antes tener email corporativo
         with pytest.raises(EmailCorporativoRequeridoError):
+            solicitante.cambiar_rol(RolUsuario.OPERADOR)
+        assert solicitante.rol == RolUsuario.SOLICITANTE
+
+    def test_ascender_solicitante_con_servicios_suscriptos_lanza_error(self) -> None:
+        # Arrange: email ya corporativo, pero conserva servicios suscriptos de Solicitante
+        solicitante = Usuario(
+            "Ana",
+            "ana@comunicarlos.com.ar",
+            "hash",
+            RolUsuario.SOLICITANTE,
+            servicios_suscriptos=_UN_SERVICIO,
+        )
+
+        # Act & Assert: Operador/Técnico/Supervisor no pueden tener servicios suscriptos
+        with pytest.raises(SuscripcionRequeridaError):
             solicitante.cambiar_rol(RolUsuario.OPERADOR)
         assert solicitante.rol == RolUsuario.SOLICITANTE
 
@@ -127,3 +158,53 @@ class TestCambiosDeRolYPassword:
 
         # Assert
         assert usuario.password_hash == "nuevo-hash-bcrypt"
+
+
+class TestServiciosSuscriptos:
+    def test_solicitante_sin_servicios_suscriptos_lanza_error(self) -> None:
+        # Act & Assert
+        with pytest.raises(SuscripcionRequeridaError):
+            Usuario("Ana", "ana@gmail.com", "hash", RolUsuario.SOLICITANTE)
+
+    def test_rol_no_solicitante_con_servicios_suscriptos_lanza_error(self) -> None:
+        # Act & Assert: solo el Solicitante tiene suscripciones a servicios
+        with pytest.raises(SuscripcionRequeridaError):
+            Usuario(
+                "Ana",
+                "ana@comunicarlos.com.ar",
+                "hash",
+                RolUsuario.OPERADOR,
+                servicios_suscriptos=_UN_SERVICIO,
+            )
+
+    def test_solicitante_con_servicios_suscriptos_es_valido(self) -> None:
+        # Act
+        usuario = Usuario(
+            "Ana",
+            "ana@gmail.com",
+            "hash",
+            RolUsuario.SOLICITANTE,
+            servicios_suscriptos=_UN_SERVICIO,
+        )
+
+        # Assert
+        assert usuario.servicios_suscriptos == _UN_SERVICIO
+
+
+class TestAuditoriaDeCuenta:
+    def test_usuario_nace_con_fecha_creacion_y_sin_ultimo_acceso(self, usuario: Usuario) -> None:
+        # Assert
+        assert isinstance(usuario.fecha_creacion, datetime)
+        assert usuario.fecha_creacion.tzinfo is not None
+        assert usuario.ultimo_acceso is None
+
+    def test_registrar_acceso_fija_ultimo_acceso(self, usuario: Usuario) -> None:
+        # Arrange
+        antes = datetime.now(UTC)
+
+        # Act
+        usuario.registrar_acceso()
+
+        # Assert
+        assert usuario.ultimo_acceso is not None
+        assert usuario.ultimo_acceso >= antes

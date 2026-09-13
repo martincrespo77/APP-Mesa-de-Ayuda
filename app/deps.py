@@ -15,7 +15,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from pymongo.database import Database
 
-from app.auth import TokenInvalidoError, decodificar_token
+from app.auth import TokenInvalidoError, decodificar_token, verificar_password
 from app.compartido.dominio import RolUsuario
 from app.infraestructura.repo_requerimientos import RepositorioRequerimientosMongo
 from app.infraestructura.repo_usuarios import RepositorioUsuariosMongo
@@ -68,7 +68,7 @@ def obtener_despachador_eventos() -> DespachadorEventos:
 def obtener_servicio_usuarios(
     repositorio: RepositorioUsuarios = Depends(obtener_repositorio_usuarios),
 ) -> ServicioUsuarios:
-    return ServicioUsuarios(repositorio)
+    return ServicioUsuarios(repositorio, verificar_password)
 
 
 def obtener_servicio_requerimientos(

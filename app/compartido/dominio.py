@@ -15,3 +15,12 @@ class RolUsuario(StrEnum):
     OPERADOR = "OPERADOR"
     TECNICO = "TECNICO"
     SUPERVISOR = "SUPERVISOR"
+
+
+class ServicioComunicarlos(StrEnum):
+    """Servicios que presta la cooperativa, a los que un Solicitante se suscribe
+    y sobre los que se abre un Incidente/Solicitud."""
+
+    TELEFONIA_CELULAR = "TELEFONIA_CELULAR"
+    INTERNET_BANDA_ANCHA = "INTERNET_BANDA_ANCHA"
+    TELEVISION = "TELEVISION"

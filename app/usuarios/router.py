@@ -11,10 +11,11 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from app.auth import crear_token_acceso, obtener_password_hash, verificar_password
+from app.auth import crear_token_acceso, obtener_password_hash
 from app.compartido.dominio import RolUsuario
 from app.deps import obtener_servicio_usuarios, obtener_usuario_actual, requerir_rol
 from app.usuarios.dominio import Usuario
+from app.usuarios.excepciones import CredencialesInvalidasError
 from app.usuarios.schemas import (
     CambiarRolRequest,
     TokenResponse,
@@ -31,17 +32,20 @@ def login(
     credenciales: OAuth2PasswordRequestForm = Depends(),
     servicio: ServicioUsuarios = Depends(obtener_servicio_usuarios),
 ) -> TokenResponse:
-    """Autentica por email (campo `username` del form OAuth2) + password."""
-    usuario = servicio.obtener_por_email(credenciales.username)
-    credenciales_validas = usuario is not None and verificar_password(
-        credenciales.password, usuario.password_hash
-    )
-    if not credenciales_validas or usuario is None or not usuario.activo:
+    """Autentica por email (campo `username` del form OAuth2) + password.
+
+    La verificación de credenciales y el registro de `ultimo_acceso` viven en
+    `ServicioUsuarios.autenticar` (side-effect de auditoría en la capa de
+    servicio, no en el router); acá solo se traduce el fallo a 401 OAuth2.
+    """
+    try:
+        usuario = servicio.autenticar(credenciales.username, credenciales.password)
+    except CredencialesInvalidasError as error:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email o contraseña incorrectos.",
+            detail=str(error),
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from error
     token = crear_token_acceso(usuario.id, usuario.rol)
     return TokenResponse(access_token=token)
 
@@ -66,6 +70,7 @@ def crear_usuario(
         email=datos.email,
         password_hash=obtener_password_hash(datos.password),
         rol=datos.rol,
+        servicios_suscriptos=frozenset(datos.servicios_suscriptos),
     )
     return UsuarioResponse.model_validate(usuario)
 

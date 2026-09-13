@@ -1,10 +1,11 @@
 """Esquemas Pydantic v2 (DTOs) del módulo de usuarios: requests y responses."""
 
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.compartido.dominio import RolUsuario
+from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 
 
 class UsuarioCreateRequest(BaseModel):
@@ -14,6 +15,7 @@ class UsuarioCreateRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
     rol: RolUsuario
+    servicios_suscriptos: list[ServicioComunicarlos] = Field(default_factory=list)
 
 
 class CambiarRolRequest(BaseModel):
@@ -32,6 +34,9 @@ class UsuarioResponse(BaseModel):
     email: str
     rol: RolUsuario
     activo: bool
+    servicios_suscriptos: frozenset[ServicioComunicarlos]
+    fecha_creacion: datetime
+    ultimo_acceso: datetime | None
 
 
 class TokenResponse(BaseModel):

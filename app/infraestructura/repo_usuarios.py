@@ -17,7 +17,7 @@ from typing import Any
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-from app.compartido.dominio import RolUsuario
+from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.infraestructura.database import COLECCION_USUARIOS
 from app.usuarios.dominio import Usuario
 from app.usuarios.repositorio import RepositorioUsuarios
@@ -54,6 +54,9 @@ def _a_documento(usuario: Usuario) -> dict[str, Any]:
         "password_hash": usuario.password_hash,
         "rol": usuario.rol.value,
         "activo": usuario.activo,
+        "servicios_suscriptos": [servicio.value for servicio in usuario.servicios_suscriptos],
+        "fecha_creacion": usuario.fecha_creacion,
+        "ultimo_acceso": usuario.ultimo_acceso,
     }
 
 
@@ -66,4 +69,9 @@ def _a_dominio(documento: dict[str, Any]) -> Usuario:
         password_hash=documento["password_hash"],
         rol=RolUsuario(documento["rol"]),
         activo=documento["activo"],
+        servicios_suscriptos=frozenset(
+            ServicioComunicarlos(s) for s in documento.get("servicios_suscriptos", [])
+        ),
+        fecha_creacion=documento["fecha_creacion"],
+        ultimo_acceso=documento.get("ultimo_acceso"),
     )

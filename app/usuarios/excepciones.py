@@ -25,3 +25,12 @@ class EmailYaRegistradoError(UsuarioError):
 
 class EmailCorporativoRequeridoError(UsuarioError):
     """Lanzada cuando Operador, Técnico o Supervisor no usan el email corporativo."""
+
+
+class SuscripcionRequeridaError(UsuarioError):
+    """Lanzada cuando un Solicitante no tiene ningún servicio suscripto, o cuando
+    un rol no-Solicitante recibe servicios suscriptos (solo el Solicitante los tiene)."""
+
+
+class CredencialesInvalidasError(UsuarioError):
+    """Lanzada al autenticar con email/password incorrectos o un usuario inactivo."""
