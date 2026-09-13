@@ -11,21 +11,23 @@ para el Modo Demostración (doc05). Las vistas de Qt programan contra
 import dataclasses
 import uuid
 from abc import ABC, abstractmethod
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 from jose import jwt
 
 from desktop.models import (
+    CategoriaIncidente,
     CategoriaSolicitud,
     EstadoRequerimiento,
     EventoDTO,
     RequerimientoDTO,
     RolUsuario,
-    Severidad,
+    ServicioComunicarlos,
     TipoEventoRequerimiento,
     TipoRequerimiento,
+    UrgenciaIncidente,
     UsuarioDTO,
 )
 
@@ -87,9 +89,10 @@ class ClienteApi(ABC):
         self,
         titulo: str,
         descripcion: str,
-        severidad: Severidad,
+        urgencia: UrgenciaIncidente,
+        categoria: CategoriaIncidente,
+        servicio: ServicioComunicarlos,
         pasos_reproduccion: str,
-        servicio_afectado: str,
     ) -> RequerimientoDTO: ...
 
     @abstractmethod
@@ -98,8 +101,7 @@ class ClienteApi(ABC):
         titulo: str,
         descripcion: str,
         categoria: CategoriaSolicitud,
-        fecha_limite: datetime,
-        impacto_estimado: str,
+        servicio: ServicioComunicarlos,
     ) -> RequerimientoDTO: ...
 
     @abstractmethod
@@ -166,17 +168,19 @@ class ApiClienteHttp(ClienteApi):
         self,
         titulo: str,
         descripcion: str,
-        severidad: Severidad,
+        urgencia: UrgenciaIncidente,
+        categoria: CategoriaIncidente,
+        servicio: ServicioComunicarlos,
         pasos_reproduccion: str,
-        servicio_afectado: str,
     ) -> RequerimientoDTO:
         cuerpo = {
             "tipo": "INCIDENTE",
             "titulo": titulo,
             "descripcion": descripcion,
-            "severidad": severidad.value,
+            "urgencia": urgencia.value,
+            "categoria": categoria.value,
+            "servicio": servicio.value,
             "pasos_reproduccion": pasos_reproduccion,
-            "servicio_afectado": servicio_afectado,
         }
         return RequerimientoDTO.desde_json(self._solicitar("POST", "/requerimientos", json=cuerpo))
 
@@ -185,16 +189,14 @@ class ApiClienteHttp(ClienteApi):
         titulo: str,
         descripcion: str,
         categoria: CategoriaSolicitud,
-        fecha_limite: datetime,
-        impacto_estimado: str,
+        servicio: ServicioComunicarlos,
     ) -> RequerimientoDTO:
         cuerpo = {
             "tipo": "SOLICITUD",
             "titulo": titulo,
             "descripcion": descripcion,
             "categoria": categoria.value,
-            "fecha_limite": fecha_limite.isoformat(),
-            "impacto_estimado": impacto_estimado,
+            "servicio": servicio.value,
         }
         return RequerimientoDTO.desde_json(self._solicitar("POST", "/requerimientos", json=cuerpo))
 
@@ -285,9 +287,10 @@ def _requerimientos_demo(usuarios: dict[str, UsuarioDTO]) -> list[RequerimientoD
         tecnico_asignado_id=None,
         nota_resolucion=None,
         historial=(_evento(TipoEventoRequerimiento.CREACION, solicitante.id, "Creado (demo)."),),
-        severidad=Severidad.CRITICA,
+        urgencia=UrgenciaIncidente.CRITICO,
+        categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+        servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         pasos_reproduccion="ONT sin luz de señal.",
-        servicio_afectado="Fibra óptica residencial",
     )
 
     incidente_en_progreso = RequerimientoDTO(
@@ -304,9 +307,10 @@ def _requerimientos_demo(usuarios: dict[str, UsuarioDTO]) -> list[RequerimientoD
             _evento(TipoEventoRequerimiento.CREACION, solicitante.id, "Creado (demo)."),
             _evento(TipoEventoRequerimiento.ASIGNACION, tecnico.id, "Técnico asignado (demo)."),
         ),
-        severidad=Severidad.MEDIA,
+        urgencia=UrgenciaIncidente.IMPORTANTE,
+        categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+        servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
         pasos_reproduccion="Llamar y esperar 5 minutos.",
-        servicio_afectado="Telefonía IP",
     )
 
     solicitud_abierta = RequerimientoDTO(
@@ -320,9 +324,8 @@ def _requerimientos_demo(usuarios: dict[str, UsuarioDTO]) -> list[RequerimientoD
         tecnico_asignado_id=None,
         nota_resolucion=None,
         historial=(_evento(TipoEventoRequerimiento.CREACION, solicitante.id, "Creado (demo)."),),
-        categoria=CategoriaSolicitud.NUEVO_SERVICIO,
-        fecha_limite=ahora + timedelta(days=10),
-        impacto_estimado="Bajo",
+        categoria=CategoriaSolicitud.ALTA_SERVICIO,
+        servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
     )
 
     return [incidente_abierto, incidente_en_progreso, solicitud_abierta]
@@ -375,9 +378,10 @@ class ApiClienteDemo(ClienteApi):
         self,
         titulo: str,
         descripcion: str,
-        severidad: Severidad,
+        urgencia: UrgenciaIncidente,
+        categoria: CategoriaIncidente,
+        servicio: ServicioComunicarlos,
         pasos_reproduccion: str,
-        servicio_afectado: str,
     ) -> RequerimientoDTO:
         usuario = self._exigir_sesion()
         nuevo = RequerimientoDTO(
@@ -391,9 +395,10 @@ class ApiClienteDemo(ClienteApi):
             tecnico_asignado_id=None,
             nota_resolucion=None,
             historial=(_evento(TipoEventoRequerimiento.CREACION, usuario.id, "Creado (demo)."),),
-            severidad=severidad,
+            urgencia=urgencia,
+            categoria=categoria,
+            servicio=servicio,
             pasos_reproduccion=pasos_reproduccion,
-            servicio_afectado=servicio_afectado,
         )
         self._requerimientos[nuevo.id] = nuevo
         return nuevo
@@ -403,8 +408,7 @@ class ApiClienteDemo(ClienteApi):
         titulo: str,
         descripcion: str,
         categoria: CategoriaSolicitud,
-        fecha_limite: datetime,
-        impacto_estimado: str,
+        servicio: ServicioComunicarlos,
     ) -> RequerimientoDTO:
         usuario = self._exigir_sesion()
         nuevo = RequerimientoDTO(
@@ -419,8 +423,7 @@ class ApiClienteDemo(ClienteApi):
             nota_resolucion=None,
             historial=(_evento(TipoEventoRequerimiento.CREACION, usuario.id, "Creado (demo)."),),
             categoria=categoria,
-            fecha_limite=fecha_limite,
-            impacto_estimado=impacto_estimado,
+            servicio=servicio,
         )
         self._requerimientos[nuevo.id] = nuevo
         return nuevo

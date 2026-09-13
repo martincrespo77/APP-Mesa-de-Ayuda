@@ -7,7 +7,7 @@ de claims del JWT sin verificar firma.
 
 import json
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import parse_qs
 
@@ -23,7 +23,14 @@ from desktop.api_client import (
     SesionNoIniciadaError,
     _claims_del_token,
 )
-from desktop.models import CategoriaSolicitud, EstadoRequerimiento, RolUsuario, Severidad
+from desktop.models import (
+    CategoriaIncidente,
+    CategoriaSolicitud,
+    EstadoRequerimiento,
+    RolUsuario,
+    ServicioComunicarlos,
+    UrgenciaIncidente,
+)
 
 _EMAIL_VALIDO = "sol@comunicarlos.com"
 _PASSWORD_VALIDA = "clave-segura-1"
@@ -64,9 +71,10 @@ def _requerimiento_json(**overrides: Any) -> dict[str, Any]:
         "nota_resolucion": None,
         "historial": [],
         "tipo": "INCIDENTE",
-        "severidad": "ALTA",
+        "urgencia": "IMPORTANTE",
+        "categoria": "SERVICIO_INACCESIBLE",
+        "servicio": "INTERNET_BANDA_ANCHA",
         "pasos_reproduccion": "p",
-        "servicio_afectado": "s",
     }
     base.update(overrides)
     return base
@@ -205,14 +213,15 @@ class TestApiClienteHttpRequerimientos:
         creado = cliente.crear_incidente(
             titulo="Router no enciende",
             descripcion="Sin luces.",
-            severidad=Severidad.BAJA,
+            urgencia=UrgenciaIncidente.MENOR,
+            categoria=CategoriaIncidente.PERDIDA_O_DESTRUCCION_DE_EQUIPO,
+            servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
             pasos_reproduccion="Ver led.",
-            servicio_afectado="Fibra",
         )
 
         # Assert
         assert creado.titulo == "Router no enciende"
-        assert creado.severidad == Severidad.BAJA
+        assert creado.urgencia == UrgenciaIncidente.MENOR
 
     def test_iniciar_analisis_devuelve_requerimiento_actualizado(
         self, cliente: ApiClienteHttp
@@ -298,9 +307,10 @@ class TestApiClienteDemo:
         nuevo = cliente.crear_incidente(
             titulo="Nuevo incidente",
             descripcion="d",
-            severidad=Severidad.MEDIA,
+            urgencia=UrgenciaIncidente.IMPORTANTE,
+            categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+            servicio=ServicioComunicarlos.TELEVISION,
             pasos_reproduccion="p",
-            servicio_afectado="s",
         )
 
         # Assert
@@ -317,9 +327,8 @@ class TestApiClienteDemo:
         nueva = cliente.crear_solicitud(
             titulo="Cambio de plan",
             descripcion="d",
-            categoria=CategoriaSolicitud.CAMBIO_ABONO,
-            fecha_limite=datetime.now(UTC) + timedelta(days=3),
-            impacto_estimado="Medio",
+            categoria=CategoriaSolicitud.BAJA_SERVICIO,
+            servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
         )
 
         # Assert
@@ -397,8 +406,12 @@ class TestApiClienteDemo:
 
         # Act
         cliente_a.crear_incidente(
-            titulo="Solo en A", descripcion="d", severidad=Severidad.BAJA,
-            pasos_reproduccion="p", servicio_afectado="s",
+            titulo="Solo en A",
+            descripcion="d",
+            urgencia=UrgenciaIncidente.MENOR,
+            categoria=CategoriaIncidente.BLOQUEO_SIM,
+            servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
+            pasos_reproduccion="p",
         )
 
         # Assert

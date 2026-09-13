@@ -8,14 +8,12 @@ de todos los requerimientos visibles).
 
 import uuid
 from collections.abc import Callable
-from datetime import UTC
 
-from PyQt6.QtCore import QDateTime, QModelIndex, Qt
+from PyQt6.QtCore import QModelIndex, Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
-    QDateTimeEdit,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -38,14 +36,16 @@ from PyQt6.QtWidgets import (
 
 from desktop.api_client import ClienteApi, ClienteApiError
 from desktop.models import (
+    CategoriaIncidente,
     CategoriaSolicitud,
     EstadoRequerimiento,
     RequerimientoDTO,
-    Severidad,
+    ServicioComunicarlos,
     TipoRequerimiento,
+    UrgenciaIncidente,
     UsuarioDTO,
 )
-from desktop.styles import color_para_estado, color_para_severidad
+from desktop.styles import color_para_estado, color_para_urgencia
 
 _ROL_REQUERIMIENTO_ID = Qt.ItemDataRole.UserRole
 _TODOS = "Todos"
@@ -206,15 +206,15 @@ class MainWindow(QTabWidget):
         ]
         if req.tipo is TipoRequerimiento.INCIDENTE:
             lineas += [
-                f"Severidad: {req.severidad.value if req.severidad else '-'}",
+                f"Urgencia: {req.urgencia.value if req.urgencia else '-'}",
+                f"Categoría: {req.categoria.value if req.categoria else '-'}",
+                f"Servicio: {req.servicio.value if req.servicio else '-'}",
                 f"Pasos de reproducción: {req.pasos_reproduccion}",
-                f"Servicio afectado: {req.servicio_afectado}",
             ]
         else:
             lineas += [
                 f"Categoría: {req.categoria.value if req.categoria else '-'}",
-                f"Fecha límite: {req.fecha_limite}",
-                f"Impacto estimado: {req.impacto_estimado}",
+                f"Servicio: {req.servicio.value if req.servicio else '-'}",
             ]
         if req.nota_resolucion:
             lineas.append(f"Nota de resolución: {req.nota_resolucion}")
@@ -307,25 +307,35 @@ class MainWindow(QTabWidget):
         self._nuevo_descripcion.setFixedHeight(80)
 
         self._grupo_incidente = QGroupBox("Datos del Incidente")
-        self._nueva_severidad = QComboBox()
-        self._nueva_severidad.addItems([severidad.value for severidad in Severidad])
+        self._nueva_urgencia = QComboBox()
+        self._nueva_urgencia.addItems([urgencia.value for urgencia in UrgenciaIncidente])
+        self._nueva_categoria_incidente = QComboBox()
+        self._nueva_categoria_incidente.addItems(
+            [categoria.value for categoria in CategoriaIncidente]
+        )
+        self._nuevo_servicio_incidente = QComboBox()
+        self._nuevo_servicio_incidente.addItems(
+            [servicio.value for servicio in ServicioComunicarlos]
+        )
         self._nuevos_pasos_reproduccion = QLineEdit()
-        self._nuevo_servicio_afectado = QLineEdit()
         layout_incidente = QFormLayout(self._grupo_incidente)
-        layout_incidente.addRow("Severidad:", self._nueva_severidad)
+        layout_incidente.addRow("Urgencia:", self._nueva_urgencia)
+        layout_incidente.addRow("Categoría:", self._nueva_categoria_incidente)
+        layout_incidente.addRow("Servicio:", self._nuevo_servicio_incidente)
         layout_incidente.addRow("Pasos de reproducción:", self._nuevos_pasos_reproduccion)
-        layout_incidente.addRow("Servicio afectado:", self._nuevo_servicio_afectado)
 
         self._grupo_solicitud = QGroupBox("Datos de la Solicitud")
-        self._nueva_categoria = QComboBox()
-        self._nueva_categoria.addItems([categoria.value for categoria in CategoriaSolicitud])
-        self._nueva_fecha_limite = QDateTimeEdit(QDateTime.currentDateTime().addDays(7))
-        self._nueva_fecha_limite.setCalendarPopup(True)
-        self._nuevo_impacto_estimado = QLineEdit()
+        self._nueva_categoria_solicitud = QComboBox()
+        self._nueva_categoria_solicitud.addItems(
+            [categoria.value for categoria in CategoriaSolicitud]
+        )
+        self._nuevo_servicio_solicitud = QComboBox()
+        self._nuevo_servicio_solicitud.addItems(
+            [servicio.value for servicio in ServicioComunicarlos]
+        )
         layout_solicitud = QFormLayout(self._grupo_solicitud)
-        layout_solicitud.addRow("Categoría:", self._nueva_categoria)
-        layout_solicitud.addRow("Fecha límite:", self._nueva_fecha_limite)
-        layout_solicitud.addRow("Impacto estimado:", self._nuevo_impacto_estimado)
+        layout_solicitud.addRow("Categoría:", self._nueva_categoria_solicitud)
+        layout_solicitud.addRow("Servicio:", self._nuevo_servicio_solicitud)
 
         boton_crear = QPushButton("Crear requerimiento")
         boton_crear.clicked.connect(self._crear_requerimiento)
@@ -363,20 +373,17 @@ class MainWindow(QTabWidget):
                 self._cliente.crear_incidente(
                     titulo=titulo,
                     descripcion=descripcion,
-                    severidad=Severidad(self._nueva_severidad.currentText()),
+                    urgencia=UrgenciaIncidente(self._nueva_urgencia.currentText()),
+                    categoria=CategoriaIncidente(self._nueva_categoria_incidente.currentText()),
+                    servicio=ServicioComunicarlos(self._nuevo_servicio_incidente.currentText()),
                     pasos_reproduccion=self._nuevos_pasos_reproduccion.text().strip(),
-                    servicio_afectado=self._nuevo_servicio_afectado.text().strip(),
                 )
             else:
-                fecha_limite = (
-                    self._nueva_fecha_limite.dateTime().toPyDateTime().replace(tzinfo=UTC)
-                )
                 self._cliente.crear_solicitud(
                     titulo=titulo,
                     descripcion=descripcion,
-                    categoria=CategoriaSolicitud(self._nueva_categoria.currentText()),
-                    fecha_limite=fecha_limite,
-                    impacto_estimado=self._nuevo_impacto_estimado.text().strip(),
+                    categoria=CategoriaSolicitud(self._nueva_categoria_solicitud.currentText()),
+                    servicio=ServicioComunicarlos(self._nuevo_servicio_solicitud.currentText()),
                 )
         except ClienteApiError as error:
             QMessageBox.warning(self, "No se pudo crear el requerimiento", str(error))
@@ -385,8 +392,6 @@ class MainWindow(QTabWidget):
         self._nuevo_titulo.clear()
         self._nuevo_descripcion.clear()
         self._nuevos_pasos_reproduccion.clear()
-        self._nuevo_servicio_afectado.clear()
-        self._nuevo_impacto_estimado.clear()
         QMessageBox.information(self, "Listo", "Requerimiento creado con éxito.")
         self._refrescar()
         self.setCurrentIndex(0)
@@ -463,8 +468,8 @@ class MainWindow(QTabWidget):
             self._tabla.setItem(fila, 3, QTableWidgetItem(str(req.solicitante_id)))
             self._tabla.setItem(fila, 4, QTableWidgetItem(f"{req.fecha_creacion:%Y-%m-%d %H:%M}"))
 
-            if req.severidad is not None:
-                item_tipo.setForeground(_qcolor(color_para_severidad(req.severidad)))
+            if req.urgencia is not None:
+                item_tipo.setForeground(_qcolor(color_para_urgencia(req.urgencia)))
 
             if req.id == id_previo:
                 fila_previa = fila

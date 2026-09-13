@@ -19,13 +19,23 @@ const ETIQUETAS_ESTADO = {
     CANCELADO: "Cancelado",
 };
 
-const ETIQUETAS_SEVERIDAD = { BAJA: "Baja", MEDIA: "Media", ALTA: "Alta", CRITICA: "Crítica" };
+const ETIQUETAS_URGENCIA = { MENOR: "Menor", IMPORTANTE: "Importante", CRITICO: "Crítico" };
 
-const ETIQUETAS_CATEGORIA = {
-    NUEVO_SERVICIO: "Nuevo servicio",
-    CAMBIO_ABONO: "Cambio de abono",
-    CONSULTA_ADMINISTRATIVA: "Consulta administrativa",
-    FACTURACION: "Facturación",
+const ETIQUETAS_CATEGORIA_INCIDENTE = {
+    SERVICIO_INACCESIBLE: "Servicio inaccesible",
+    BLOQUEO_SIM: "Bloqueo de SIM",
+    PERDIDA_O_DESTRUCCION_DE_EQUIPO: "Pérdida o destrucción de equipo",
+};
+
+const ETIQUETAS_CATEGORIA_SOLICITUD = {
+    ALTA_SERVICIO: "Alta de servicio",
+    BAJA_SERVICIO: "Baja de servicio",
+};
+
+const ETIQUETAS_SERVICIO = {
+    TELEFONIA_CELULAR: "Telefonía celular",
+    INTERNET_BANDA_ANCHA: "Internet de banda ancha",
+    TELEVISION: "Televisión",
 };
 
 const ETIQUETAS_EVENTO = {
@@ -110,19 +120,18 @@ document.getElementById("form-nuevo").addEventListener("submit", async (evento) 
             tipo: "INCIDENTE",
             titulo,
             descripcion,
-            severidad: document.getElementById("severidad").value,
+            urgencia: document.getElementById("urgencia").value,
+            categoria: document.getElementById("categoria-incidente").value,
+            servicio: document.getElementById("servicio-incidente").value,
             pasos_reproduccion: document.getElementById("pasos_reproduccion").value,
-            servicio_afectado: document.getElementById("servicio_afectado").value,
         };
     } else {
-        const fechaLimite = document.getElementById("fecha_limite").value;
         cuerpo = {
             tipo: "SOLICITUD",
             titulo,
             descripcion,
-            categoria: document.getElementById("categoria").value,
-            fecha_limite: fechaLimite ? new Date(fechaLimite).toISOString() : null,
-            impacto_estimado: document.getElementById("impacto_estimado").value,
+            categoria: document.getElementById("categoria-solicitud").value,
+            servicio: document.getElementById("servicio-solicitud").value,
         };
     }
 
@@ -147,9 +156,9 @@ const errorListado = document.getElementById("error-listado");
 
 function metaEspecifica(ticket) {
     if (ticket.tipo === "INCIDENTE") {
-        return `Severidad: ${ETIQUETAS_SEVERIDAD[ticket.severidad] ?? ticket.severidad}`;
+        return `Urgencia: ${ETIQUETAS_URGENCIA[ticket.urgencia] ?? ticket.urgencia}`;
     }
-    return `Categoría: ${ETIQUETAS_CATEGORIA[ticket.categoria] ?? ticket.categoria}`;
+    return `Categoría: ${ETIQUETAS_CATEGORIA_SOLICITUD[ticket.categoria] ?? ticket.categoria}`;
 }
 
 function renderizarTicket(ticket) {
@@ -225,15 +234,21 @@ function mostrarDetalle(ticket) {
 
     if (ticket.tipo === "INCIDENTE") {
         filas.push(
-            filaDetalle("Severidad", ETIQUETAS_SEVERIDAD[ticket.severidad] ?? ticket.severidad),
-            filaDetalle("Servicio afectado", ticket.servicio_afectado),
+            filaDetalle("Urgencia", ETIQUETAS_URGENCIA[ticket.urgencia] ?? ticket.urgencia),
+            filaDetalle(
+                "Categoría",
+                ETIQUETAS_CATEGORIA_INCIDENTE[ticket.categoria] ?? ticket.categoria,
+            ),
+            filaDetalle("Servicio", ETIQUETAS_SERVICIO[ticket.servicio] ?? ticket.servicio),
             filaDetalle("Pasos de reproducción", ticket.pasos_reproduccion),
         );
     } else {
         filas.push(
-            filaDetalle("Categoría", ETIQUETAS_CATEGORIA[ticket.categoria] ?? ticket.categoria),
-            filaDetalle("Fecha límite", formatearFecha(ticket.fecha_limite)),
-            filaDetalle("Impacto estimado", ticket.impacto_estimado),
+            filaDetalle(
+                "Categoría",
+                ETIQUETAS_CATEGORIA_SOLICITUD[ticket.categoria] ?? ticket.categoria,
+            ),
+            filaDetalle("Servicio", ETIQUETAS_SERVICIO[ticket.servicio] ?? ticket.servicio),
         );
     }
 

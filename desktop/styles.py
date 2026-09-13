@@ -6,7 +6,7 @@ pintar badges puntuales (estado, severidad) donde QSS por selector no
 alcanza (p. ej. el texto de una celda de `QTableWidget`).
 """
 
-from desktop.models import EstadoRequerimiento, Severidad
+from desktop.models import EstadoRequerimiento, UrgenciaIncidente
 
 # -- Paleta (doc05: fondos oscuros, acentos violeta/azul) ---------------------
 
@@ -125,11 +125,10 @@ _COLOR_POR_ESTADO: dict[EstadoRequerimiento, str] = {
     EstadoRequerimiento.CANCELADO: _GRIS,
 }
 
-_COLOR_POR_SEVERIDAD: dict[Severidad, str] = {
-    Severidad.BAJA: _VERDE,
-    Severidad.MEDIA: _NARANJA,
-    Severidad.ALTA: _ROJO,
-    Severidad.CRITICA: _ROJO,
+_COLOR_POR_URGENCIA: dict[UrgenciaIncidente, str] = {
+    UrgenciaIncidente.MENOR: _VERDE,
+    UrgenciaIncidente.IMPORTANTE: _NARANJA,
+    UrgenciaIncidente.CRITICO: _ROJO,
 }
 
 
@@ -138,6 +137,6 @@ def color_para_estado(estado: EstadoRequerimiento) -> str:
     return _COLOR_POR_ESTADO[estado]
 
 
-def color_para_severidad(severidad: Severidad) -> str:
-    """Color semántico de la severidad (doc05: rojo=alta/crítica)."""
-    return _COLOR_POR_SEVERIDAD[severidad]
+def color_para_urgencia(urgencia: UrgenciaIncidente) -> str:
+    """Color semántico de la urgencia (doc05: rojo=crítico)."""
+    return _COLOR_POR_URGENCIA[urgencia]

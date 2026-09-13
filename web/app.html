@@ -48,19 +48,29 @@
                     <div id="campos-incidente">
                         <div class="fila">
                             <div>
-                                <label for="severidad">Severidad</label>
-                                <select id="severidad">
-                                    <option value="BAJA">Baja</option>
-                                    <option value="MEDIA">Media</option>
-                                    <option value="ALTA">Alta</option>
-                                    <option value="CRITICA">Crítica</option>
+                                <label for="urgencia">Urgencia</label>
+                                <select id="urgencia">
+                                    <option value="MENOR">Menor</option>
+                                    <option value="IMPORTANTE">Importante</option>
+                                    <option value="CRITICO">Crítico</option>
                                 </select>
                             </div>
                             <div>
-                                <label for="servicio_afectado">Servicio afectado</label>
-                                <input type="text" id="servicio_afectado" placeholder="Fibra, telefonía IP, TV…" />
+                                <label for="categoria-incidente">Categoría</label>
+                                <select id="categoria-incidente">
+                                    <option value="SERVICIO_INACCESIBLE">Servicio inaccesible</option>
+                                    <option value="BLOQUEO_SIM">Bloqueo de SIM</option>
+                                    <option value="PERDIDA_O_DESTRUCCION_DE_EQUIPO">Pérdida o destrucción de equipo</option>
+                                </select>
                             </div>
                         </div>
+
+                        <label for="servicio-incidente">Servicio</label>
+                        <select id="servicio-incidente">
+                            <option value="TELEFONIA_CELULAR">Telefonía celular</option>
+                            <option value="INTERNET_BANDA_ANCHA">Internet de banda ancha</option>
+                            <option value="TELEVISION">Televisión</option>
+                        </select>
 
                         <label for="pasos_reproduccion">Pasos para reproducir el problema</label>
                         <textarea id="pasos_reproduccion"></textarea>
@@ -70,22 +80,21 @@
                     <div id="campos-solicitud" hidden>
                         <div class="fila">
                             <div>
-                                <label for="categoria">Categoría</label>
-                                <select id="categoria">
-                                    <option value="NUEVO_SERVICIO">Nuevo servicio</option>
-                                    <option value="CAMBIO_ABONO">Cambio de abono</option>
-                                    <option value="CONSULTA_ADMINISTRATIVA">Consulta administrativa</option>
-                                    <option value="FACTURACION">Facturación</option>
+                                <label for="categoria-solicitud">Categoría</label>
+                                <select id="categoria-solicitud">
+                                    <option value="ALTA_SERVICIO">Alta de servicio</option>
+                                    <option value="BAJA_SERVICIO">Baja de servicio</option>
                                 </select>
                             </div>
                             <div>
-                                <label for="fecha_limite">Fecha límite deseada</label>
-                                <input type="datetime-local" id="fecha_limite" />
+                                <label for="servicio-solicitud">Servicio</label>
+                                <select id="servicio-solicitud">
+                                    <option value="TELEFONIA_CELULAR">Telefonía celular</option>
+                                    <option value="INTERNET_BANDA_ANCHA">Internet de banda ancha</option>
+                                    <option value="TELEVISION">Televisión</option>
+                                </select>
                             </div>
                         </div>
-
-                        <label for="impacto_estimado">Impacto estimado</label>
-                        <textarea id="impacto_estimado"></textarea>
                     </div>
 
                     <button type="submit" style="margin-top: 20px;">Crear requerimiento</button>

@@ -34,18 +34,27 @@ class TipoRequerimiento(StrEnum):
     SOLICITUD = "SOLICITUD"
 
 
-class Severidad(StrEnum):
-    BAJA = "BAJA"
-    MEDIA = "MEDIA"
-    ALTA = "ALTA"
-    CRITICA = "CRITICA"
+class UrgenciaIncidente(StrEnum):
+    CRITICO = "CRITICO"
+    IMPORTANTE = "IMPORTANTE"
+    MENOR = "MENOR"
+
+
+class CategoriaIncidente(StrEnum):
+    SERVICIO_INACCESIBLE = "SERVICIO_INACCESIBLE"
+    BLOQUEO_SIM = "BLOQUEO_SIM"
+    PERDIDA_O_DESTRUCCION_DE_EQUIPO = "PERDIDA_O_DESTRUCCION_DE_EQUIPO"
+
+
+class ServicioComunicarlos(StrEnum):
+    TELEFONIA_CELULAR = "TELEFONIA_CELULAR"
+    INTERNET_BANDA_ANCHA = "INTERNET_BANDA_ANCHA"
+    TELEVISION = "TELEVISION"
 
 
 class CategoriaSolicitud(StrEnum):
-    NUEVO_SERVICIO = "NUEVO_SERVICIO"
-    CAMBIO_ABONO = "CAMBIO_ABONO"
-    CONSULTA_ADMINISTRATIVA = "CONSULTA_ADMINISTRATIVA"
-    FACTURACION = "FACTURACION"
+    ALTA_SERVICIO = "ALTA_SERVICIO"
+    BAJA_SERVICIO = "BAJA_SERVICIO"
 
 
 class TipoEventoRequerimiento(StrEnum):
@@ -120,14 +129,12 @@ class RequerimientoDTO:
     tecnico_asignado_id: uuid.UUID | None
     nota_resolucion: str | None
     historial: tuple[EventoDTO, ...]
-    # Específicos de Incidente
-    severidad: Severidad | None = None
+    # Específico de Incidente
+    urgencia: UrgenciaIncidente | None = None
     pasos_reproduccion: str | None = None
-    servicio_afectado: str | None = None
-    # Específicos de Solicitud
-    categoria: CategoriaSolicitud | None = None
-    fecha_limite: datetime | None = None
-    impacto_estimado: str | None = None
+    # Compartidos entre Incidente y Solicitud
+    categoria: CategoriaIncidente | CategoriaSolicitud | None = None
+    servicio: ServicioComunicarlos | None = None
 
     @staticmethod
     def desde_json(datos: dict[str, Any]) -> "RequerimientoDTO":
@@ -150,13 +157,13 @@ class RequerimientoDTO:
         if tipo is TipoRequerimiento.INCIDENTE:
             return RequerimientoDTO(
                 **comunes,
-                severidad=Severidad(datos["severidad"]),
+                urgencia=UrgenciaIncidente(datos["urgencia"]),
+                categoria=CategoriaIncidente(datos["categoria"]),
+                servicio=ServicioComunicarlos(datos["servicio"]),
                 pasos_reproduccion=datos["pasos_reproduccion"],
-                servicio_afectado=datos["servicio_afectado"],
             )
         return RequerimientoDTO(
             **comunes,
             categoria=CategoriaSolicitud(datos["categoria"]),
-            fecha_limite=datetime.fromisoformat(datos["fecha_limite"]),
-            impacto_estimado=datos["impacto_estimado"],
+            servicio=ServicioComunicarlos(datos["servicio"]),
         )
