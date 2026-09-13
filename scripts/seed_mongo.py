@@ -224,14 +224,15 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
 
 
 def _crear_supervisiones(usuarios: dict[str, Usuario]) -> list[RelacionSupervision]:
-    """El supervisor de ejemplo audita al operador y al técnico de ejemplo."""
+    """El supervisor de ejemplo audita al técnico de ejemplo.
+
+    Deja al operador de ejemplo SIN relación de supervisión a propósito:
+    la colección de Bruno (`03-supervision/01-asignar-supervision`) demuestra
+    el alta en vivo asignándoselo — si el seed ya la creara, ese request
+    chocaría con `RelacionYaExisteError` (409) contra datos recién sembrados.
+    """
     supervisor_id = usuarios["supervisor1"].id
     return [
-        RelacionSupervision(
-            id=_id("supervision-operador1"),
-            supervisor_id=supervisor_id,
-            supervisado_id=usuarios["operador1"].id,
-        ),
         RelacionSupervision(
             id=_id("supervision-tecnico1"),
             supervisor_id=supervisor_id,
@@ -241,15 +242,15 @@ def _crear_supervisiones(usuarios: dict[str, Usuario]) -> list[RelacionSupervisi
 
 
 def _crear_notificacion_ejemplo(usuarios: dict[str, Usuario]) -> Notificacion:
-    """Notificación de ejemplo: aviso al supervisor de que el operador inició
-    el análisis de `incidente-en-analisis` (ver `_crear_requerimientos`)."""
+    """Notificación de ejemplo: aviso al supervisor de que el técnico inició
+    el progreso de `incidente-en-progreso` (ver `_crear_requerimientos`)."""
     return Notificacion(
         id=_id("notificacion-ejemplo"),
         supervisor_id=usuarios["supervisor1"].id,
-        empleado_supervisado_id=usuarios["operador1"].id,
-        requerimiento_id=_id("incidente-en-analisis"),
+        empleado_supervisado_id=usuarios["tecnico1"].id,
+        requerimiento_id=_id("incidente-en-progreso"),
         tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
-        detalle="Estado cambiado de ABIERTO a EN_ANALISIS.",
+        detalle="Estado cambiado de EN_ANALISIS a EN_PROGRESO.",
     )
 
 

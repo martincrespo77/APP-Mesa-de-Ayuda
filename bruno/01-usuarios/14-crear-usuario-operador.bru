@@ -1,0 +1,38 @@
+meta {
+  name: 14 Crear Usuario Operador (para cambiar de rol)
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{base_url}}/usuarios
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_supervisor}}
+}
+
+body:json {
+  {
+    "nombre_completo": "Operador de Prueba Bruno",
+    "email": "bruno.operador@comunicarlos.com.ar",
+    "password": "clave-bruno-123",
+    "rol": "OPERADOR"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.rol: eq OPERADOR
+}
+
+script:post-response {
+  bru.setEnvVar("usuario_operador_creado_id", res.body.id);
+}
+
+docs {
+  Sin `servicios_suscriptos` (vacío por defecto): Operador no puede
+  tenerlas. Se usa en "15" para un cambio de rol que sí se completa.
+}

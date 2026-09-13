@@ -1,5 +1,5 @@
 meta {
-  name: 04 Cambiar Rol
+  name: 04 Cambiar Rol a un Solicitante con Suscripciones (rechazado)
   type: http
   seq: 4
 }
@@ -21,6 +21,13 @@ body:json {
 }
 
 assert {
-  res.status: eq 200
-  res.body.rol: eq OPERADOR
+  res.status: eq 400
+}
+
+docs {
+  Regla de negocio del rediseño: Operador/Técnico/Supervisor no pueden
+  tener `servicios_suscriptos`, y este usuario (creado en "02 Crear
+  Usuario") es un Solicitante con una suscripción activa. Ascenderlo sin
+  antes limpiarla lanza SuscripcionRequeridaError (400). Ver "14/15" para
+  un cambio de rol que sí se puede completar (entre roles operativos).
 }

@@ -1,0 +1,31 @@
+meta {
+  name: 15 Cambiar Rol Entre Roles Operativos (exitoso)
+  type: http
+  seq: 15
+}
+
+patch {
+  url: {{base_url}}/usuarios/{{usuario_operador_creado_id}}/rol
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_supervisor}}
+}
+
+body:json {
+  {
+    "nuevo_rol": "TECNICO"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.rol: eq TECNICO
+}
+
+docs {
+  A diferencia de "04", este usuario nunca tuvo `servicios_suscriptos`
+  (Operador/Técnico no las tienen), así que el cambio de rol se completa.
+}
