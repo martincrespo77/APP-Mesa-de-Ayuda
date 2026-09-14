@@ -18,6 +18,7 @@ from app.usuarios.dominio import Usuario
 from app.usuarios.excepciones import CredencialesInvalidasError
 from app.usuarios.schemas import (
     CambiarRolRequest,
+    TecnicoResponse,
     TokenResponse,
     UsuarioCreateRequest,
     UsuarioResponse,
@@ -54,6 +55,23 @@ def login(
 def obtener_mi_perfil(usuario_actual: Usuario = Depends(obtener_usuario_actual)) -> UsuarioResponse:
     """Cualquier usuario autenticado puede consultar su propio perfil."""
     return UsuarioResponse.model_validate(usuario_actual)
+
+
+@router.get(
+    "/tecnicos",
+    response_model=list[TecnicoResponse],
+    dependencies=[
+        Depends(requerir_rol(RolUsuario.OPERADOR, RolUsuario.TECNICO, RolUsuario.SUPERVISOR))
+    ],
+)
+def listar_tecnicos(
+    servicio: ServicioUsuarios = Depends(obtener_servicio_usuarios),
+) -> list[TecnicoResponse]:
+    """Lista acotada de técnicos activos para selectores de asignación
+    (Operador) y derivación (Técnico). Declarada antes de cualquier ruta
+    paramétrica `/usuarios/{usuario_id}` que se agregue a futuro, para que
+    FastAPI no intente interpretar "tecnicos" como un id."""
+    return [TecnicoResponse.model_validate(t) for t in servicio.listar_tecnicos_activos()]
 
 
 @router.post(

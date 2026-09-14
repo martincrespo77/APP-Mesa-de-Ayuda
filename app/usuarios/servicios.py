@@ -75,6 +75,15 @@ class ServicioUsuarios:
     def listar_todos(self) -> list[Usuario]:
         return self._repositorio.listar_todos()
 
+    def listar_tecnicos_activos(self) -> list[Usuario]:
+        """Técnicos activos, para poblar selectores de asignación/derivación
+        (Operador y Técnico no tienen acceso a `listar_todos`, solo a esto)."""
+        return [
+            usuario
+            for usuario in self._repositorio.listar_todos()
+            if usuario.rol == RolUsuario.TECNICO and usuario.activo
+        ]
+
     def activar(self, usuario_id: uuid.UUID) -> Usuario:
         usuario = self._buscar_o_lanzar(usuario_id)
         usuario.activar()

@@ -1,0 +1,24 @@
+meta {
+  name: 17 Listar Técnicos sin Permiso (403 esperado)
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{base_url}}/usuarios/tecnicos
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_solicitante}}
+}
+
+assert {
+  res.status: eq 403
+}
+
+docs {
+  Un Solicitante no participa de la asignación/derivación de técnicos,
+  así que no tiene acceso a GET /usuarios/tecnicos (solo OPERADOR,
+  TECNICO y SUPERVISOR).
+}

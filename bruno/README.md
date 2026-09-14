@@ -27,7 +27,9 @@ Las carpetas están numeradas y cada request depende de las anteriores
   cubre dos veces: "04" documenta que ascender a OPERADOR a un Solicitante
   con suscripciones activas se rechaza (400, `SuscripcionRequeridaError`);
   "14"/"15" crean un Operador sin suscripciones y sí lo cambian a Técnico
-  con éxito.
+  con éxito. "16"/"17" cubren `GET /usuarios/tecnicos` (endpoint acotado de
+  la Fase 2 del portal web: Operador/Técnico/Supervisor lo pueden llamar,
+  Solicitante no).
 - `02-requerimientos/`: crear Incidente (`urgencia`/`categoria`/`servicio`/
   `pasos_reproduccion`) y Solicitud (`categoria`/`servicio`), listar con
   visibilidad propia, el flujo completo de transiciones de un Incidente

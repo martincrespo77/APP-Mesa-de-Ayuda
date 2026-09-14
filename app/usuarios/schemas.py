@@ -39,6 +39,17 @@ class UsuarioResponse(BaseModel):
     ultimo_acceso: datetime | None
 
 
+class TecnicoResponse(BaseModel):
+    """Representación mínima de un Técnico para poblar selectores (asignación,
+    derivación). A propósito no reutiliza `UsuarioResponse`: no expone email,
+    servicios_suscriptos ni fechas, que un Operador/Técnico no necesita ver."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    nombre_completo: str
+
+
 class TokenResponse(BaseModel):
     """Respuesta del endpoint de login."""
 

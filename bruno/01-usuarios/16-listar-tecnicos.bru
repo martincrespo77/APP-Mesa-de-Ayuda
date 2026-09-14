@@ -1,0 +1,37 @@
+meta {
+  name: 16 Listar Técnicos (Operador, Técnico y Supervisor)
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{base_url}}/usuarios/tecnicos
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token_operador}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:post-response {
+  const encontrado = res.body.find((t) => t.email !== undefined);
+  if (encontrado) {
+    throw new Error("El endpoint acotado no debería exponer el email (solo id + nombre_completo).");
+  }
+  const tieneAlIvan = res.body.some((t) => t.nombre_completo === "Iván Ríos");
+  if (!tieneAlIvan) {
+    throw new Error("Se esperaba encontrar al técnico sembrado 'Iván Ríos' en el listado.");
+  }
+}
+
+docs {
+  GET /usuarios/tecnicos (Tarea 2.0 de PLAN_DESARROLLO_4_ROLES.md, Fase 2):
+  a diferencia de GET /usuarios (solo Supervisor), este endpoint acotado
+  también lo puede llamar un Operador (para el dropdown de "Asignar
+  técnico") y un Técnico (para el dropdown de "Derivar"), pero solo
+  devuelve id + nombre_completo de técnicos activos.
+}
