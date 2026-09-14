@@ -158,6 +158,8 @@ header.encabezado {
     gap: 4px;
     border-bottom: 1px solid var(--borde);
     margin-bottom: 20px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .pestana {
@@ -168,6 +170,8 @@ header.encabezado {
     color: var(--texto-secundario);
     padding: 10px 16px;
     font-weight: 600;
+    white-space: nowrap;
+    flex: 0 0 auto;
 }
 
 .pestana:hover {
@@ -274,6 +278,35 @@ header.encabezado {
     background-color: var(--acento-violeta);
     border-color: var(--acento-violeta);
     color: white;
+}
+
+.metricas {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.metrica {
+    flex: 1 1 120px;
+    background-color: var(--tarjeta);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+}
+
+.metrica-valor {
+    display: block;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.metrica-etiqueta {
+    display: block;
+    color: var(--texto-secundario);
+    font-size: 12px;
+    margin-top: 4px;
 }
 
 .vacio {

@@ -69,6 +69,9 @@ function formatearFecha(iso) {
 let usuarioActual = null;
 let rolActual = null;
 let tecnicosCache = [];
+let usuariosCache = []; // Fase 4 (Supervisor): GET /usuarios completo, para resolver nombres.
+let notificacionesCache = [];
+let supervisadosCache = [];
 
 const ROLES_BANDEJA_GENERAL_SIMPLE = new Set(["OPERADOR", "SUPERVISOR"]);
 const ROLES_LISTAN_TECNICOS = new Set(["OPERADOR", "TECNICO", "SUPERVISOR"]);
@@ -122,6 +125,13 @@ function aplicarRolAInterfaz() {
         (esTecnico && vistaTecnico === "todos")
     );
 
+    // Fase 4 (Supervisor): pestañas propias de Notificaciones y Equipo
+    // supervisado, más el panel de métricas sobre el listado general.
+    const esSupervisor = rolActual === "SUPERVISOR";
+    document.getElementById("pestana-boton-notificaciones").hidden = !esSupervisor;
+    document.getElementById("pestana-boton-equipo").hidden = !esSupervisor;
+    document.getElementById("panel-metricas").hidden = !esSupervisor;
+
     botonCancelarTicket.textContent =
         rolActual === "SOLICITANTE" ? "Cancelar ticket" : "Cancelar / Desestimar";
 }
@@ -135,6 +145,37 @@ async function cargarTecnicos() {
     }
 }
 
+function nombreUsuario(usuarioId) {
+    return usuariosCache.find((u) => u.id === usuarioId)?.nombre_completo ?? usuarioId;
+}
+
+function actualizarBadgeNotificaciones() {
+    const noLeidas = notificacionesCache.filter((n) => !n.leida).length;
+    const boton = document.getElementById("pestana-boton-notificaciones");
+    boton.textContent = noLeidas > 0 ? `Notificaciones (${noLeidas})` : "Notificaciones";
+}
+
+async function cargarUsuariosTodos() {
+    if (rolActual !== "SUPERVISOR") return;
+    try {
+        usuariosCache = await apiFetchJson("/usuarios");
+    } catch {
+        usuariosCache = [];
+    }
+}
+
+async function cargarNotificaciones() {
+    if (rolActual !== "SUPERVISOR") return;
+    notificacionesCache = await apiFetchJson("/notificaciones");
+    notificacionesCache.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    actualizarBadgeNotificaciones();
+}
+
+async function cargarSupervisados() {
+    if (rolActual !== "SUPERVISOR") return;
+    supervisadosCache = await apiFetchJson("/supervisiones");
+}
+
 async function cargarPerfil() {
     try {
         const usuario = await apiFetchJson("/usuarios/me");
@@ -145,6 +186,13 @@ async function cargarPerfil() {
         filtrarSelectoresServicio();
         aplicarRolAInterfaz();
         await cargarTecnicos();
+        await cargarUsuariosTodos();
+        try {
+            await cargarNotificaciones();
+        } catch {
+            // No bloqueante: el badge queda en 0 hasta que se reintente
+            // (por ejemplo, al abrir la pestaña de Notificaciones).
+        }
     } catch {
         // apiFetch ya redirige a login si fue un 401; cualquier otro error
         // deja el encabezado en su placeholder, no es bloqueante para el resto.
@@ -159,6 +207,8 @@ const pestanas = document.querySelectorAll(".pestana");
 const secciones = {
     nuevo: document.getElementById("pestana-nuevo"),
     listado: document.getElementById("pestana-listado"),
+    notificaciones: document.getElementById("pestana-notificaciones"),
+    equipo: document.getElementById("pestana-equipo"),
 };
 
 function mostrarPestana(nombre) {
@@ -167,6 +217,8 @@ function mostrarPestana(nombre) {
         el.hidden = clave !== nombre;
     });
     if (nombre === "listado") cargarListado();
+    if (nombre === "notificaciones") cargarYRenderizarNotificaciones();
+    if (nombre === "equipo") cargarYRenderizarEquipo();
 }
 
 pestanas.forEach((boton) => {
@@ -303,7 +355,23 @@ function ticketPasaFiltro(ticket) {
         : ticketPasaFiltroSimple(ticket);
 }
 
+function actualizarMetricas() {
+    if (rolActual !== "SUPERVISOR") return;
+    // Métricas del Panel Global: se calculan sobre TODOS los tickets, no
+    // sobre el subconjunto que dejan pasar los filtros avanzados vigentes.
+    document.getElementById("metrica-abiertos").textContent = ticketsCache.filter(
+        (t) => t.estado === "ABIERTO",
+    ).length;
+    document.getElementById("metrica-criticos").textContent = ticketsCache.filter(
+        (t) => t.tipo === "INCIDENTE" && t.urgencia === "CRITICO",
+    ).length;
+    document.getElementById("metrica-resueltos").textContent = ticketsCache.filter(
+        (t) => t.estado === "RESUELTO",
+    ).length;
+}
+
 function renderizarListado() {
+    actualizarMetricas();
     listaTickets.innerHTML = "";
     if (ticketsCache.length === 0) {
         listaTickets.innerHTML = '<p class="vacio">Todavía no cargaste ningún requerimiento.</p>';
@@ -702,6 +770,166 @@ botonComentar.addEventListener("click", async () => {
         errorDetalle.hidden = false;
     } finally {
         botonComentar.disabled = false;
+    }
+});
+
+// -- Notificaciones y Equipo supervisado (Fase 4, Supervisor) ------------------
+
+const listaNotificaciones = document.getElementById("lista-notificaciones");
+const errorNotificaciones = document.getElementById("error-notificaciones");
+
+function renderizarNotificacion(notificacion) {
+    const div = document.createElement("div");
+    div.className = "ticket";
+    if (!notificacion.leida) div.classList.add("ticket-alerta");
+    div.innerHTML = `
+        <div class="ticket-encabezado">
+            <div>
+                <div class="ticket-titulo">${ETIQUETAS_EVENTO[notificacion.tipo_evento] ?? notificacion.tipo_evento} — ${nombreUsuario(notificacion.empleado_supervisado_id)}</div>
+                <div class="ticket-meta">${notificacion.detalle} · ${formatearFecha(notificacion.timestamp)}</div>
+            </div>
+        </div>
+        <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button type="button" class="secundario boton-ver-ticket">Ver ticket</button>
+            ${notificacion.leida ? "" : '<button type="button" class="boton-marcar-leida">Marcar como leída</button>'}
+        </div>
+    `;
+    div.querySelector(".boton-ver-ticket").addEventListener("click", async () => {
+        try {
+            const ticket = await apiFetchJson(`/requerimientos/${notificacion.requerimiento_id}`);
+            mostrarDetalle(ticket);
+        } catch (error) {
+            errorNotificaciones.textContent = error.message;
+            errorNotificaciones.hidden = false;
+        }
+    });
+    const botonLeida = div.querySelector(".boton-marcar-leida");
+    if (botonLeida) {
+        botonLeida.addEventListener("click", async () => {
+            botonLeida.disabled = true;
+            try {
+                await apiFetchJson(`/notificaciones/${notificacion.id}/leida`, { method: "PATCH" });
+                notificacion.leida = true;
+                actualizarBadgeNotificaciones();
+                renderizarNotificaciones();
+            } catch (error) {
+                errorNotificaciones.textContent = error.message;
+                errorNotificaciones.hidden = false;
+                botonLeida.disabled = false;
+            }
+        });
+    }
+    return div;
+}
+
+function renderizarNotificaciones() {
+    listaNotificaciones.innerHTML = "";
+    if (notificacionesCache.length === 0) {
+        listaNotificaciones.innerHTML = '<p class="vacio">No hay notificaciones todavía.</p>';
+        return;
+    }
+    notificacionesCache.forEach((n) => listaNotificaciones.appendChild(renderizarNotificacion(n)));
+}
+
+async function cargarYRenderizarNotificaciones() {
+    errorNotificaciones.hidden = true;
+    listaNotificaciones.innerHTML = '<p class="vacio">Cargando…</p>';
+    try {
+        await cargarNotificaciones();
+        renderizarNotificaciones();
+    } catch (error) {
+        listaNotificaciones.innerHTML = "";
+        errorNotificaciones.textContent = error.message;
+        errorNotificaciones.hidden = false;
+    }
+}
+
+document.getElementById("boton-refrescar-notificaciones").addEventListener(
+    "click",
+    cargarYRenderizarNotificaciones,
+);
+
+const listaEquipo = document.getElementById("lista-equipo");
+const errorEquipo = document.getElementById("error-equipo");
+const selectNuevoSupervisado = document.getElementById("select-nuevo-supervisado");
+const botonAgregarSupervisado = document.getElementById("boton-agregar-supervisado");
+
+const ROLES_SUPERVISABLES = new Set(["OPERADOR", "TECNICO"]);
+
+function renderizarEquipo() {
+    listaEquipo.innerHTML = "";
+    if (supervisadosCache.length === 0) {
+        listaEquipo.innerHTML = '<p class="vacio">Todavía no supervisás a nadie.</p>';
+        return;
+    }
+    supervisadosCache.forEach((relacion) => {
+        const usuario = usuariosCache.find((u) => u.id === relacion.supervisado_id);
+        const div = document.createElement("div");
+        div.className = "ticket";
+        div.innerHTML = `
+            <div class="ticket-encabezado">
+                <div>
+                    <div class="ticket-titulo">${usuario?.nombre_completo ?? relacion.supervisado_id}</div>
+                    <div class="ticket-meta">${usuario?.rol ?? ""} · Supervisado desde: ${formatearFecha(relacion.fecha_asignacion)}</div>
+                </div>
+                <button type="button" class="secundario boton-quitar-supervisado">Quitar</button>
+            </div>
+        `;
+        div.querySelector(".boton-quitar-supervisado").addEventListener("click", async () => {
+            if (!window.confirm(`¿Dejar de supervisar a ${usuario?.nombre_completo ?? "este usuario"}?`)) return;
+            errorEquipo.hidden = true;
+            try {
+                await apiFetchJson(`/supervisiones/${relacion.supervisado_id}`, { method: "DELETE" });
+                await cargarYRenderizarEquipo();
+            } catch (error) {
+                errorEquipo.textContent = error.message;
+                errorEquipo.hidden = false;
+            }
+        });
+        listaEquipo.appendChild(div);
+    });
+}
+
+function poblarSelectNuevoSupervisado() {
+    const yaSupervisados = new Set(supervisadosCache.map((r) => r.supervisado_id));
+    const candidatos = usuariosCache.filter(
+        (u) => ROLES_SUPERVISABLES.has(u.rol) && u.activo && !yaSupervisados.has(u.id),
+    );
+    selectNuevoSupervisado.innerHTML = candidatos
+        .map((u) => `<option value="${u.id}">${u.nombre_completo} (${u.rol})</option>`)
+        .join("");
+}
+
+async function cargarYRenderizarEquipo() {
+    errorEquipo.hidden = true;
+    listaEquipo.innerHTML = '<p class="vacio">Cargando…</p>';
+    try {
+        await cargarSupervisados();
+        renderizarEquipo();
+        poblarSelectNuevoSupervisado();
+    } catch (error) {
+        listaEquipo.innerHTML = "";
+        errorEquipo.textContent = error.message;
+        errorEquipo.hidden = false;
+    }
+}
+
+botonAgregarSupervisado.addEventListener("click", async () => {
+    const supervisadoId = selectNuevoSupervisado.value;
+    if (!supervisadoId) return;
+    errorEquipo.hidden = true;
+    botonAgregarSupervisado.disabled = true;
+    try {
+        await apiFetchJson("/supervisiones", {
+            method: "POST",
+            body: JSON.stringify({ supervisado_id: supervisadoId }),
+        });
+        await cargarYRenderizarEquipo();
+    } catch (error) {
+        errorEquipo.textContent = error.message;
+        errorEquipo.hidden = false;
+    } finally {
+        botonAgregarSupervisado.disabled = false;
     }
 });
 

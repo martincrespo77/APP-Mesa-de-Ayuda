@@ -25,6 +25,8 @@
         <nav class="pestanas">
             <button class="pestana activa" data-pestana="nuevo">Nuevo requerimiento</button>
             <button class="pestana" data-pestana="listado" id="pestana-boton-listado">Mis requerimientos</button>
+            <button class="pestana" data-pestana="notificaciones" id="pestana-boton-notificaciones" hidden>Notificaciones</button>
+            <button class="pestana" data-pestana="equipo" id="pestana-boton-equipo" hidden>Equipo supervisado</button>
         </nav>
 
         <!-- Pestaña: Nuevo requerimiento -->
@@ -111,6 +113,22 @@
                 <button class="secundario" id="boton-refrescar">Refrescar</button>
             </div>
 
+            <!-- Panel Global (Supervisor, Fase 4): métricas básicas -->
+            <div class="metricas" id="panel-metricas" hidden>
+                <div class="metrica">
+                    <span class="metrica-valor" id="metrica-abiertos">0</span>
+                    <span class="metrica-etiqueta">Abiertos</span>
+                </div>
+                <div class="metrica">
+                    <span class="metrica-valor" id="metrica-criticos">0</span>
+                    <span class="metrica-etiqueta">Críticos</span>
+                </div>
+                <div class="metrica">
+                    <span class="metrica-valor" id="metrica-resueltos">0</span>
+                    <span class="metrica-etiqueta">Resueltos</span>
+                </div>
+            </div>
+
             <!-- Filtro simple (Solicitante): Todos/Activos/Finalizados -->
             <div class="filtro-estado" id="filtro-estado">
                 <button type="button" class="chip activa" data-filtro="todos">Todos</button>
@@ -160,6 +178,34 @@
 
             <p class="error" id="error-listado" hidden></p>
             <div class="lista-tickets" id="lista-tickets"></div>
+        </section>
+
+        <!-- Pestaña: Notificaciones (Supervisor, Fase 4) -->
+        <section id="pestana-notificaciones" hidden>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                <h2 style="margin: 0;">Notificaciones</h2>
+                <button class="secundario" id="boton-refrescar-notificaciones">Refrescar</button>
+            </div>
+            <p class="error" id="error-notificaciones" hidden></p>
+            <div class="lista-tickets" id="lista-notificaciones"></div>
+        </section>
+
+        <!-- Pestaña: Equipo supervisado (Supervisor, Fase 4) -->
+        <section id="pestana-equipo" hidden>
+            <div class="tarjeta" style="margin-bottom: 16px;">
+                <h2>Agregar supervisado</h2>
+                <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <label for="select-nuevo-supervisado">Operador o Técnico</label>
+                        <select id="select-nuevo-supervisado"></select>
+                    </div>
+                    <button type="button" id="boton-agregar-supervisado">Agregar</button>
+                </div>
+                <p class="error" id="error-equipo" hidden></p>
+            </div>
+
+            <h2>Mi equipo</h2>
+            <div class="lista-tickets" id="lista-equipo"></div>
         </section>
     </div>
 
