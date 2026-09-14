@@ -82,4 +82,5 @@ El usuario solicitó construir la interfaz web adaptada a los 4 roles de forma *
   - Solicitante: `marcos.diaz@comunicarlos.com`
   - Operador: `rosa.molina@comunicarlos.com.ar`
   - Técnico: `ivan.rios@comunicarlos.com.ar`
+  - Técnico: `marta.suarez@comunicarlos.com.ar` (segundo técnico, sin tickets propios — existe para poder probar "Derivar a otro técnico" con un destino real)
   - Supervisor: `sofia.jefa@comunicarlos.com.ar`

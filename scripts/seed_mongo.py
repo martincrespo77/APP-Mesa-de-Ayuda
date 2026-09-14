@@ -43,7 +43,11 @@ def _id(clave: str) -> uuid.UUID:
 
 
 def _crear_usuarios() -> dict[str, Usuario]:
-    """Un usuario por cada uno de los 4 roles, más un segundo solicitante."""
+    """Un usuario por cada uno de los 4 roles, más un segundo solicitante y un
+    segundo técnico (`tecnico2`, sin tickets asignados de por sí): sin él, la
+    acción "Derivar a otro técnico" del portal web (Fase 3) no tiene a quién
+    ofrecer en el selector y el bloque queda oculto — hace falta para poder
+    probar esa interconsulta de punta a punta."""
     password_hash = obtener_password_hash(_PASSWORD_SEED)
     datos: tuple[tuple[str, str, str, RolUsuario, frozenset[ServicioComunicarlos]], ...] = (
         (
@@ -71,6 +75,13 @@ def _crear_usuarios() -> dict[str, Usuario]:
             "tecnico1",
             "Iván Ríos",
             "ivan.rios@comunicarlos.com.ar",
+            RolUsuario.TECNICO,
+            frozenset(),
+        ),
+        (
+            "tecnico2",
+            "Marta Suárez",
+            "marta.suarez@comunicarlos.com.ar",
             RolUsuario.TECNICO,
             frozenset(),
         ),
