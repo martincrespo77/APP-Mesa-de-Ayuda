@@ -50,13 +50,24 @@ async function apiFetch(ruta, opciones = {}) {
     return respuesta;
 }
 
+function mensajeDeDetalle(detalle) {
+    // FastAPI devuelve `detail` como string en errores de negocio (400/403/404),
+    // pero como lista de objetos {loc, msg, ...} en errores de validación (422).
+    if (!detalle) return null;
+    if (typeof detalle === "string") return detalle;
+    if (Array.isArray(detalle)) {
+        return detalle.map((item) => item.msg || JSON.stringify(item)).join(" · ");
+    }
+    return null;
+}
+
 async function apiFetchJson(ruta, opciones = {}) {
     const headers = new Headers(opciones.headers || {});
     headers.set("Content-Type", "application/json");
     const respuesta = await apiFetch(ruta, { ...opciones, headers });
     const datos = await respuesta.json().catch(() => null);
     if (!respuesta.ok) {
-        const mensaje = (datos && datos.detail) || "Ocurrió un error inesperado.";
+        const mensaje = mensajeDeDetalle(datos && datos.detail) || "Ocurrió un error inesperado.";
         throw new Error(mensaje);
     }
     return datos;

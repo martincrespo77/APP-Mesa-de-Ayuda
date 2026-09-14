@@ -246,6 +246,32 @@ header.encabezado {
 .badge-ALTA,
 .badge-CRITICA { background-color: var(--rojo); }
 
+.filtro-estado {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.chip {
+    background: none;
+    border: 1px solid var(--borde);
+    border-radius: 999px;
+    color: var(--texto-secundario);
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.chip:hover {
+    border-color: var(--acento-azul);
+}
+
+.chip.activa {
+    background-color: var(--acento-violeta);
+    border-color: var(--acento-violeta);
+    color: white;
+}
+
 .vacio {
     color: var(--texto-secundario);
     text-align: center;

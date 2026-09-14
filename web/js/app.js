@@ -1,8 +1,11 @@
 /**
- * Portal web: perfil del usuario actual, alta de Incidente/Solicitud y
- * listado/detalle de los propios requerimientos. Solo lectura de estado
- * (sin transiciones): las acciones de gestión del ciclo de vida quedan en
- * el cliente de escritorio, según la matriz de roles del backend.
+ * Portal web — Fase 1 (Solicitante): perfil del usuario actual, alta de
+ * Incidente/Solicitud filtrada por servicios suscriptos, y listado/detalle
+ * de los propios requerimientos con las únicas transiciones que la matriz
+ * de roles habilita a este rol (cancelar propio ABIERTO, confirmar cierre
+ * de un RESUELTO, comentar). El resto de las acciones de ciclo de vida
+ * (asignar, iniciar progreso, derivar, resolver, etc.) quedan fuera de
+ * este rol y se suman en las fases 2 a 4 del portal web.
  */
 
 if (!exigirSesion()) {
@@ -50,17 +53,43 @@ const ETIQUETAS_EVENTO = {
     REAPERTURA: "Reapertura",
 };
 
+const ESTADOS_SIN_COMENTARIOS = new Set(["CERRADO", "CANCELADO"]);
+const ESTADOS_FINALES = new Set(["CERRADO", "CANCELADO"]);
+const SELECTORES_SERVICIO = ["servicio-incidente", "servicio-solicitud"];
+
 function formatearFecha(iso) {
     return new Date(iso).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
 }
 
 // -- Perfil del usuario actual ------------------------------------------------
 
+let serviciosSuscriptos = [];
+
+function filtrarSelectoresServicio() {
+    // El backend no valida hoy el cruce servicio <-> servicios_suscriptos
+    // (ver PLAN_DESARROLLO_4_ROLES.md, Fase 1): esto es una restricción de
+    // UX para evitar tickets ilógicos, no una protección contra un 400.
+    if (serviciosSuscriptos.length === 0) return;
+    SELECTORES_SERVICIO.forEach((idSelect) => {
+        const select = document.getElementById(idSelect);
+        let primeraVisible = null;
+        [...select.options].forEach((opcion) => {
+            const suscripto = serviciosSuscriptos.includes(opcion.value);
+            opcion.hidden = !suscripto;
+            opcion.disabled = !suscripto;
+            if (suscripto && !primeraVisible) primeraVisible = opcion.value;
+        });
+        if (primeraVisible) select.value = primeraVisible;
+    });
+}
+
 async function cargarPerfil() {
     try {
         const usuario = await apiFetchJson("/usuarios/me");
         document.getElementById("usuario-nombre").textContent = usuario.nombre_completo;
         document.getElementById("usuario-rol").textContent = usuario.rol;
+        serviciosSuscriptos = usuario.servicios_suscriptos ?? [];
+        filtrarSelectoresServicio();
     } catch {
         // apiFetch ya redirige a login si fue un 401; cualquier otro error
         // deja el encabezado en su placeholder, no es bloqueante para el resto.
@@ -180,18 +209,37 @@ function renderizarTicket(ticket) {
     return div;
 }
 
+let ticketsCache = [];
+let filtroEstadoActivo = "todos";
+
+function ticketPasaFiltro(ticket) {
+    if (filtroEstadoActivo === "todos") return true;
+    const esFinal = ESTADOS_FINALES.has(ticket.estado);
+    return filtroEstadoActivo === "finalizados" ? esFinal : !esFinal;
+}
+
+function renderizarListado() {
+    listaTickets.innerHTML = "";
+    if (ticketsCache.length === 0) {
+        listaTickets.innerHTML = '<p class="vacio">Todavía no cargaste ningún requerimiento.</p>';
+        return;
+    }
+    const visibles = ticketsCache.filter(ticketPasaFiltro);
+    if (visibles.length === 0) {
+        listaTickets.innerHTML = '<p class="vacio">No hay requerimientos que coincidan con el filtro.</p>';
+        return;
+    }
+    visibles.forEach((ticket) => listaTickets.appendChild(renderizarTicket(ticket)));
+}
+
 async function cargarListado() {
     errorListado.hidden = true;
     listaTickets.innerHTML = '<p class="vacio">Cargando…</p>';
     try {
         const tickets = await apiFetchJson("/requerimientos");
         tickets.sort((a, b) => new Date(b.fecha_creacion) - new Date(a.fecha_creacion));
-        listaTickets.innerHTML = "";
-        if (tickets.length === 0) {
-            listaTickets.innerHTML = '<p class="vacio">Todavía no cargaste ningún requerimiento.</p>';
-            return;
-        }
-        tickets.forEach((ticket) => listaTickets.appendChild(renderizarTicket(ticket)));
+        ticketsCache = tickets;
+        renderizarListado();
     } catch (error) {
         listaTickets.innerHTML = "";
         errorListado.textContent = error.message;
@@ -201,12 +249,25 @@ async function cargarListado() {
 
 document.getElementById("boton-refrescar").addEventListener("click", cargarListado);
 
+document.querySelectorAll("#filtro-estado .chip").forEach((boton) => {
+    boton.addEventListener("click", () => {
+        filtroEstadoActivo = boton.dataset.filtro;
+        document
+            .querySelectorAll("#filtro-estado .chip")
+            .forEach((otro) => otro.classList.toggle("activa", otro === boton));
+        renderizarListado();
+    });
+});
+
 // -- Modal de detalle --------------------------------------------------------------
 
 const modal = document.getElementById("modal-detalle");
 const botonCancelarTicket = document.getElementById("boton-cancelar-ticket");
 const botonConfirmarCierre = document.getElementById("boton-confirmar-cierre");
 const errorDetalle = document.getElementById("error-detalle");
+const bloqueComentario = document.getElementById("bloque-comentario");
+const comentarioTexto = document.getElementById("comentario-texto");
+const botonComentar = document.getElementById("boton-comentar");
 
 let ticketActualId = null;
 
@@ -223,6 +284,8 @@ function mostrarDetalle(ticket) {
     // escritorio (Operador/Técnico/Supervisor).
     botonCancelarTicket.hidden = ticket.estado !== "ABIERTO";
     botonConfirmarCierre.hidden = ticket.estado !== "RESUELTO";
+    bloqueComentario.hidden = ESTADOS_SIN_COMENTARIOS.has(ticket.estado);
+    comentarioTexto.value = "";
 
     document.getElementById("detalle-titulo").textContent = ticket.titulo;
 
@@ -321,6 +384,30 @@ botonConfirmarCierre.addEventListener("click", () =>
         botonConfirmarCierre,
     ),
 );
+
+botonComentar.addEventListener("click", async () => {
+    const texto = comentarioTexto.value.trim();
+    if (!texto) return;
+    errorDetalle.hidden = true;
+    botonComentar.disabled = true;
+    try {
+        await apiFetchJson(`/requerimientos/${ticketActualId}/comentarios`, {
+            method: "POST",
+            body: JSON.stringify({ texto }),
+        });
+        // El endpoint de comentarios solo devuelve el comentario creado, no
+        // el ticket: hay que releerlo para reflejar el nuevo evento en el
+        // historial y un eventual estado tras la reapertura automática.
+        const actualizado = await apiFetchJson(`/requerimientos/${ticketActualId}`);
+        mostrarDetalle(actualizado);
+        cargarListado();
+    } catch (error) {
+        errorDetalle.textContent = error.message;
+        errorDetalle.hidden = false;
+    } finally {
+        botonComentar.disabled = false;
+    }
+});
 
 // -- Inicio ---------------------------------------------------------------------
 

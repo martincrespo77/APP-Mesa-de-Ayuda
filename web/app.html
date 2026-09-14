@@ -110,6 +110,11 @@
                 <h2 style="margin: 0;">Mis requerimientos</h2>
                 <button class="secundario" id="boton-refrescar">Refrescar</button>
             </div>
+            <div class="filtro-estado" id="filtro-estado">
+                <button type="button" class="chip activa" data-filtro="todos">Todos</button>
+                <button type="button" class="chip" data-filtro="activos">Activos</button>
+                <button type="button" class="chip" data-filtro="finalizados">Finalizados</button>
+            </div>
             <p class="error" id="error-listado" hidden></p>
             <div class="lista-tickets" id="lista-tickets"></div>
         </section>
@@ -129,6 +134,12 @@
                 <button id="boton-confirmar-cierre" hidden>Confirmar cierre</button>
             </div>
             <p class="error" id="error-detalle" hidden></p>
+
+            <div id="bloque-comentario" style="margin-top: 20px;">
+                <label for="comentario-texto">Agregar comentario</label>
+                <textarea id="comentario-texto" placeholder="Sumá información o seguimiento sobre este ticket…"></textarea>
+                <button type="button" class="secundario" id="boton-comentar" style="margin-top: 10px;">Comentar</button>
+            </div>
 
             <h2 style="margin-top: 20px;">Historial</h2>
             <div id="detalle-historial"></div>
