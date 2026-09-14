@@ -27,6 +27,7 @@
             <button class="pestana" data-pestana="listado" id="pestana-boton-listado">Mis requerimientos</button>
             <button class="pestana" data-pestana="notificaciones" id="pestana-boton-notificaciones" hidden>Notificaciones</button>
             <button class="pestana" data-pestana="equipo" id="pestana-boton-equipo" hidden>Equipo supervisado</button>
+            <button class="pestana" data-pestana="usuarios" id="pestana-boton-usuarios" hidden>Usuarios</button>
         </nav>
 
         <!-- Pestaña: Nuevo requerimiento -->
@@ -206,6 +207,63 @@
 
             <h2>Mi equipo</h2>
             <div class="lista-tickets" id="lista-equipo"></div>
+        </section>
+
+        <!-- Pestaña: Administrar usuarios (Supervisor) -->
+        <section id="pestana-usuarios" hidden>
+            <div class="tarjeta" style="margin-bottom: 16px;">
+                <h2>Crear usuario</h2>
+                <form id="form-crear-usuario">
+                    <label for="nuevo-usuario-nombre">Nombre completo</label>
+                    <input type="text" id="nuevo-usuario-nombre" required />
+
+                    <label for="nuevo-usuario-email">Email</label>
+                    <input type="email" id="nuevo-usuario-email" required />
+                    <p id="nuevo-usuario-hint-email" class="error" style="color: var(--texto-secundario); margin-top: 4px;" hidden>
+                        Este rol requiere un email @comunicarlos.com.ar.
+                    </p>
+
+                    <label for="nuevo-usuario-password">Contraseña</label>
+                    <input type="password" id="nuevo-usuario-password" required minlength="8" autocomplete="new-password" />
+
+                    <label for="nuevo-usuario-rol">Rol</label>
+                    <select id="nuevo-usuario-rol">
+                        <option value="SOLICITANTE">Solicitante</option>
+                        <option value="OPERADOR">Operador</option>
+                        <option value="TECNICO">Técnico</option>
+                        <option value="SUPERVISOR">Supervisor</option>
+                    </select>
+
+                    <div id="nuevo-usuario-servicios">
+                        <label>Servicios contratados</label>
+                        <div class="fila-checkboxes">
+                            <label class="checkbox">
+                                <input type="checkbox" name="nuevo-usuario-servicio" value="TELEFONIA_CELULAR" />
+                                Telefonía celular
+                            </label>
+                            <label class="checkbox">
+                                <input type="checkbox" name="nuevo-usuario-servicio" value="INTERNET_BANDA_ANCHA" />
+                                Internet de banda ancha
+                            </label>
+                            <label class="checkbox">
+                                <input type="checkbox" name="nuevo-usuario-servicio" value="TELEVISION" />
+                                Televisión
+                            </label>
+                        </div>
+                    </div>
+
+                    <button type="submit" style="margin-top: 20px;">Crear usuario</button>
+                    <p class="error" id="error-crear-usuario" hidden></p>
+                    <p class="exito" id="exito-crear-usuario" hidden></p>
+                </form>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                <h2 style="margin: 0;">Todos los usuarios</h2>
+                <button class="secundario" id="boton-refrescar-usuarios">Refrescar</button>
+            </div>
+            <p class="error" id="error-usuarios" hidden></p>
+            <div class="lista-tickets" id="lista-usuarios"></div>
         </section>
     </div>
 

@@ -1,14 +1,19 @@
 /**
- * Portal web — Fases 1 a 3 (Solicitante, Operador y Técnico): perfil del
- * usuario actual, alta de Incidente/Solicitud filtrada por servicios
- * suscriptos, y un listado/detalle de requerimientos cuyas pestañas,
- * filtros y acciones se adaptan al rol según la Matriz de Permisos de
- * CLAUDE.md. Las funciones `puede*(ticket)` son la única fuente de verdad
- * de qué botón mostrar; el backend vuelve a validar cada transición de
- * todos modos (Information Expert en las entidades de dominio), así que
- * ocultar un botón acá es una ayuda de UX, no el control de acceso real.
- * Lo específico de Supervisor (notificaciones, equipo supervisado, panel
- * global) se suma en la Fase 4.
+ * Portal web — Fases 1 a 4 (Solicitante, Operador, Técnico y Supervisor):
+ * perfil del usuario actual, alta de Incidente/Solicitud filtrada por
+ * servicios suscriptos, y un listado/detalle de requerimientos cuyas
+ * pestañas, filtros y acciones se adaptan al rol según la Matriz de
+ * Permisos de CLAUDE.md. Las funciones `puede*(ticket)` son la única
+ * fuente de verdad de qué botón mostrar; el backend vuelve a validar cada
+ * transición de todos modos (Information Expert en las entidades de
+ * dominio), así que ocultar un botón acá es una ayuda de UX, no el
+ * control de acceso real.
+ *
+ * También incluye, para Supervisor, la administración de usuarios
+ * (crear, cambiar rol, activar/desactivar) — capacidad de negocio
+ * separada de "administrar supervisiones" (pestaña Equipo supervisado):
+ * una vincula a alguien ya existente como supervisado propio, la otra
+ * da de alta cuentas nuevas o les cambia el rol.
  */
 
 if (!exigirSesion()) {
@@ -130,6 +135,7 @@ function aplicarRolAInterfaz() {
     const esSupervisor = rolActual === "SUPERVISOR";
     document.getElementById("pestana-boton-notificaciones").hidden = !esSupervisor;
     document.getElementById("pestana-boton-equipo").hidden = !esSupervisor;
+    document.getElementById("pestana-boton-usuarios").hidden = !esSupervisor;
     document.getElementById("panel-metricas").hidden = !esSupervisor;
 
     botonCancelarTicket.textContent =
@@ -157,11 +163,7 @@ function actualizarBadgeNotificaciones() {
 
 async function cargarUsuariosTodos() {
     if (rolActual !== "SUPERVISOR") return;
-    try {
-        usuariosCache = await apiFetchJson("/usuarios");
-    } catch {
-        usuariosCache = [];
-    }
+    usuariosCache = await apiFetchJson("/usuarios");
 }
 
 async function cargarNotificaciones() {
@@ -186,7 +188,12 @@ async function cargarPerfil() {
         filtrarSelectoresServicio();
         aplicarRolAInterfaz();
         await cargarTecnicos();
-        await cargarUsuariosTodos();
+        try {
+            await cargarUsuariosTodos();
+        } catch {
+            // No bloqueante: la caché queda vacía hasta que se reintente
+            // (por ejemplo, al abrir la pestaña de Usuarios).
+        }
         try {
             await cargarNotificaciones();
         } catch {
@@ -209,6 +216,7 @@ const secciones = {
     listado: document.getElementById("pestana-listado"),
     notificaciones: document.getElementById("pestana-notificaciones"),
     equipo: document.getElementById("pestana-equipo"),
+    usuarios: document.getElementById("pestana-usuarios"),
 };
 
 function mostrarPestana(nombre) {
@@ -219,6 +227,7 @@ function mostrarPestana(nombre) {
     if (nombre === "listado") cargarListado();
     if (nombre === "notificaciones") cargarYRenderizarNotificaciones();
     if (nombre === "equipo") cargarYRenderizarEquipo();
+    if (nombre === "usuarios") cargarYRenderizarUsuarios();
 }
 
 pestanas.forEach((boton) => {
@@ -932,6 +941,180 @@ botonAgregarSupervisado.addEventListener("click", async () => {
         botonAgregarSupervisado.disabled = false;
     }
 });
+
+// -- Administrar usuarios (Supervisor) ------------------------------------------
+
+const ROLES_CON_EMAIL_CORPORATIVO = new Set(["OPERADOR", "TECNICO", "SUPERVISOR"]);
+const ETIQUETAS_ROL = {
+    SOLICITANTE: "Solicitante",
+    OPERADOR: "Operador",
+    TECNICO: "Técnico",
+    SUPERVISOR: "Supervisor",
+};
+
+const formCrearUsuario = document.getElementById("form-crear-usuario");
+const selectNuevoUsuarioRol = document.getElementById("nuevo-usuario-rol");
+const bloqueNuevoUsuarioServicios = document.getElementById("nuevo-usuario-servicios");
+const hintNuevoUsuarioEmail = document.getElementById("nuevo-usuario-hint-email");
+const errorCrearUsuario = document.getElementById("error-crear-usuario");
+const exitoCrearUsuario = document.getElementById("exito-crear-usuario");
+const listaUsuarios = document.getElementById("lista-usuarios");
+const errorUsuarios = document.getElementById("error-usuarios");
+
+function actualizarFormularioSegunRol() {
+    const rol = selectNuevoUsuarioRol.value;
+    bloqueNuevoUsuarioServicios.hidden = rol !== "SOLICITANTE";
+    hintNuevoUsuarioEmail.hidden = !ROLES_CON_EMAIL_CORPORATIVO.has(rol);
+}
+
+selectNuevoUsuarioRol.addEventListener("change", actualizarFormularioSegunRol);
+actualizarFormularioSegunRol();
+
+formCrearUsuario.addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+
+    const boton = evento.submitter;
+    errorCrearUsuario.hidden = true;
+    exitoCrearUsuario.hidden = true;
+    boton.disabled = true;
+
+    const rol = selectNuevoUsuarioRol.value;
+    const servicios =
+        rol === "SOLICITANTE"
+            ? [...document.querySelectorAll('input[name="nuevo-usuario-servicio"]:checked')].map(
+                  (input) => input.value,
+              )
+            : [];
+
+    try {
+        await apiFetchJson("/usuarios", {
+            method: "POST",
+            body: JSON.stringify({
+                nombre_completo: document.getElementById("nuevo-usuario-nombre").value,
+                email: document.getElementById("nuevo-usuario-email").value,
+                password: document.getElementById("nuevo-usuario-password").value,
+                rol,
+                servicios_suscriptos: servicios,
+            }),
+        });
+        exitoCrearUsuario.textContent = "Usuario creado correctamente.";
+        exitoCrearUsuario.hidden = false;
+        evento.target.reset();
+        actualizarFormularioSegunRol();
+        await cargarYRenderizarUsuarios();
+        await cargarTecnicos(); // por si el usuario creado es un Técnico nuevo
+    } catch (error) {
+        errorCrearUsuario.textContent = error.message;
+        errorCrearUsuario.hidden = false;
+    } finally {
+        boton.disabled = false;
+    }
+});
+
+function renderizarUsuarioAdmin(usuario) {
+    const div = document.createElement("div");
+    div.className = "ticket";
+    div.innerHTML = `
+        <div class="ticket-encabezado">
+            <div>
+                <div class="ticket-titulo">${usuario.nombre_completo}</div>
+                <div class="ticket-meta">${usuario.email}</div>
+            </div>
+            <span class="badge ${usuario.activo ? "badge-ACTIVO" : "badge-INACTIVO"}">
+                ${usuario.activo ? "Activo" : "Inactivo"}
+            </span>
+        </div>
+        <div class="fila" style="margin-top: 12px; align-items: flex-end;">
+            <div>
+                <label>Rol</label>
+                <select class="select-cambiar-rol">
+                    ${Object.entries(ETIQUETAS_ROL)
+                        .map(
+                            ([valor, etiqueta]) =>
+                                `<option value="${valor}" ${valor === usuario.rol ? "selected" : ""}>${etiqueta}</option>`,
+                        )
+                        .join("")}
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" class="secundario boton-guardar-rol">Cambiar rol</button>
+                <button type="button" class="secundario boton-activar-desactivar">
+                    ${usuario.activo ? "Desactivar" : "Activar"}
+                </button>
+            </div>
+        </div>
+    `;
+
+    div.querySelector(".boton-guardar-rol").addEventListener("click", async (evento) => {
+        const nuevoRol = div.querySelector(".select-cambiar-rol").value;
+        if (nuevoRol === usuario.rol) return;
+        if (
+            !window.confirm(
+                `¿Cambiar el rol de ${usuario.nombre_completo} de ${ETIQUETAS_ROL[usuario.rol]} a ${ETIQUETAS_ROL[nuevoRol]}?`,
+            )
+        ) {
+            return;
+        }
+        errorUsuarios.hidden = true;
+        evento.target.disabled = true;
+        try {
+            await apiFetchJson(`/usuarios/${usuario.id}/rol`, {
+                method: "PATCH",
+                body: JSON.stringify({ nuevo_rol: nuevoRol }),
+            });
+            await cargarYRenderizarUsuarios();
+            await cargarTecnicos();
+        } catch (error) {
+            errorUsuarios.textContent = error.message;
+            errorUsuarios.hidden = false;
+            evento.target.disabled = false;
+        }
+    });
+
+    div.querySelector(".boton-activar-desactivar").addEventListener("click", async (evento) => {
+        const accion = usuario.activo ? "desactivar" : "activar";
+        if (!window.confirm(`¿${usuario.activo ? "Desactivar" : "Activar"} a ${usuario.nombre_completo}?`)) {
+            return;
+        }
+        errorUsuarios.hidden = true;
+        evento.target.disabled = true;
+        try {
+            await apiFetchJson(`/usuarios/${usuario.id}/${accion}`, { method: "PATCH" });
+            await cargarYRenderizarUsuarios();
+            await cargarTecnicos();
+        } catch (error) {
+            errorUsuarios.textContent = error.message;
+            errorUsuarios.hidden = false;
+            evento.target.disabled = false;
+        }
+    });
+
+    return div;
+}
+
+function renderizarUsuariosAdmin() {
+    listaUsuarios.innerHTML = "";
+    if (usuariosCache.length === 0) {
+        listaUsuarios.innerHTML = '<p class="vacio">No hay usuarios para mostrar.</p>';
+        return;
+    }
+    usuariosCache.forEach((u) => listaUsuarios.appendChild(renderizarUsuarioAdmin(u)));
+}
+
+async function cargarYRenderizarUsuarios() {
+    errorUsuarios.hidden = true;
+    listaUsuarios.innerHTML = '<p class="vacio">Cargando…</p>';
+    try {
+        await cargarUsuariosTodos();
+        renderizarUsuariosAdmin();
+    } catch (error) {
+        listaUsuarios.innerHTML = "";
+        errorUsuarios.textContent = error.message;
+        errorUsuarios.hidden = false;
+    }
+}
+
+document.getElementById("boton-refrescar-usuarios").addEventListener("click", cargarYRenderizarUsuarios);
 
 // -- Inicio ---------------------------------------------------------------------
 

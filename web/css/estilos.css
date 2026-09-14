@@ -271,6 +271,9 @@ header.encabezado {
 .badge-CERRADO { background-color: var(--verde); }
 .badge-CANCELADO { background-color: var(--gris); }
 
+.badge-ACTIVO { background-color: var(--verde); }
+.badge-INACTIVO { background-color: var(--gris); }
+
 .badge-BAJA { background-color: var(--verde); }
 .badge-MEDIA { background-color: var(--naranja); }
 .badge-ALTA,
