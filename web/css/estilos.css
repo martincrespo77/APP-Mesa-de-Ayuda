@@ -132,6 +132,28 @@ button.secundario {
     display: none !important;
 }
 
+.fila-checkboxes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.checkbox {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    margin: 0 !important;
+    font-size: 14px;
+    color: var(--texto) !important;
+    cursor: pointer;
+}
+
+.checkbox input[type="checkbox"] {
+    width: auto;
+    accent-color: var(--acento-violeta);
+}
+
 /* -- Portal (app.html) -- */
 
 .contenedor-ancho {

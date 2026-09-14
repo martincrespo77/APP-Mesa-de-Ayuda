@@ -7,11 +7,12 @@
     <link rel="stylesheet" href="css/estilos.css" />
 </head>
 <body>
-    <div class="contenedor" style="padding-top: 15vh;">
+    <div class="contenedor" style="padding-top: 10vh; max-width: 420px;">
         <div class="tarjeta">
             <h1>Mesa de Ayuda</h1>
-            <p class="subtitulo">Cooperativa Comunicarlos — Portal web</p>
+            <p class="subtitulo" style="margin-bottom: 20px;">Cooperativa Comunicarlos — Portal web</p>
 
+            <!-- Iniciar sesión -->
             <form id="form-login">
                 <label for="email">Email</label>
                 <input type="email" id="email" name="email" required autocomplete="username" />
@@ -27,6 +28,63 @@
 
                 <button type="submit" style="width: 100%; margin-top: 20px;">Ingresar</button>
                 <p class="error" id="error-login" hidden></p>
+                <p style="text-align: center; margin-top: 16px; font-size: 13px;">
+                    ¿Todavía no tenés cuenta?
+                    <a href="#" id="link-ir-a-registro">Registrate</a>
+                </p>
+            </form>
+
+            <!-- Registrarse (solo clientes / Solicitante) -->
+            <form id="form-registro" hidden>
+                <label for="registro-nombre">Nombre completo</label>
+                <input type="text" id="registro-nombre" required />
+
+                <label for="registro-email">Email</label>
+                <input type="email" id="registro-email" required autocomplete="username" />
+                <p style="color: var(--texto-secundario); font-size: 12px; margin: 4px 0 0;">
+                    Cualquier email sirve (Gmail, Hotmail, etc.) — no hace falta que sea de Comunicarlos.
+                </p>
+
+                <label for="registro-password">Contraseña</label>
+                <input
+                    type="password"
+                    id="registro-password"
+                    required
+                    minlength="8"
+                    autocomplete="new-password"
+                />
+
+                <label for="registro-password-confirmar">Confirmar contraseña</label>
+                <input
+                    type="password"
+                    id="registro-password-confirmar"
+                    required
+                    minlength="8"
+                    autocomplete="new-password"
+                />
+
+                <label>¿Qué servicios tenés contratados con la cooperativa?</label>
+                <div class="fila-checkboxes">
+                    <label class="checkbox">
+                        <input type="checkbox" name="registro-servicio" value="TELEFONIA_CELULAR" />
+                        Telefonía celular
+                    </label>
+                    <label class="checkbox">
+                        <input type="checkbox" name="registro-servicio" value="INTERNET_BANDA_ANCHA" />
+                        Internet de banda ancha
+                    </label>
+                    <label class="checkbox">
+                        <input type="checkbox" name="registro-servicio" value="TELEVISION" />
+                        Televisión
+                    </label>
+                </div>
+
+                <button type="submit" style="width: 100%; margin-top: 20px;">Crear cuenta</button>
+                <p class="error" id="error-registro" hidden></p>
+                <p style="text-align: center; margin-top: 16px; font-size: 13px;">
+                    ¿Ya tenés cuenta?
+                    <a href="#" id="link-ir-a-login">Iniciá sesión</a>
+                </p>
             </form>
         </div>
     </div>

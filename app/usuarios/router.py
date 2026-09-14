@@ -1,9 +1,13 @@
-"""Endpoints FastAPI del módulo de usuarios: login y administración.
+"""Endpoints FastAPI del módulo de usuarios: login, auto-registro y
+administración.
 
-Todos los endpoints salvo `/login` y `/me` están gateados con
+Todos los endpoints salvo `/login`, `/registro` y `/me` están gateados con
 `requerir_rol(SUPERVISOR)`, siguiendo la matriz de roles de
 `02_OBJETIVO_Y_DOMINIO_NEGOCIO.md` ("Administrar usuarios": solo
-Supervisor). No hay auto-registro: las cuentas las crea un Supervisor.
+Supervisor). La única excepción es `/registro`: cualquiera puede crear su
+propia cuenta de SOLICITANTE sin autenticarse (auto-servicio para poder
+cargar tickets); las cuentas operativas (Operador/Técnico/Supervisor)
+las sigue creando exclusivamente un Supervisor vía `POST /usuarios`.
 """
 
 import uuid
@@ -18,6 +22,7 @@ from app.usuarios.dominio import Usuario
 from app.usuarios.excepciones import CredencialesInvalidasError
 from app.usuarios.schemas import (
     CambiarRolRequest,
+    RegistroSolicitanteRequest,
     TecnicoResponse,
     TokenResponse,
     UsuarioCreateRequest,
@@ -49,6 +54,24 @@ def login(
         ) from error
     token = crear_token_acceso(usuario.id, usuario.rol)
     return TokenResponse(access_token=token)
+
+
+@router.post("/registro", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
+def registrarse(
+    datos: RegistroSolicitanteRequest, servicio: ServicioUsuarios = Depends(obtener_servicio_usuarios)
+) -> UsuarioResponse:
+    """Auto-registro público (sin autenticación): siempre crea un
+    SOLICITANTE. `RegistroSolicitanteRequest` no tiene campo `rol`, así que
+    no hay forma de pedir otro rol desde acá — para cuentas operativas
+    sigue haciendo falta `POST /usuarios` con un Supervisor autenticado."""
+    usuario = servicio.registrar(
+        nombre_completo=datos.nombre_completo,
+        email=datos.email,
+        password_hash=obtener_password_hash(datos.password),
+        rol=RolUsuario.SOLICITANTE,
+        servicios_suscriptos=frozenset(datos.servicios_suscriptos),
+    )
+    return UsuarioResponse.model_validate(usuario)
 
 
 @router.get("/me", response_model=UsuarioResponse)

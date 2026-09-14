@@ -18,6 +18,18 @@ class UsuarioCreateRequest(BaseModel):
     servicios_suscriptos: list[ServicioComunicarlos] = Field(default_factory=list)
 
 
+class RegistroSolicitanteRequest(BaseModel):
+    """Datos de auto-registro público. A propósito no tiene campo `rol`: el
+    endpoint que la consume siempre crea un SOLICITANTE, así nadie puede
+    auto-registrarse como Operador/Técnico/Supervisor mandando ese campo en
+    el body (la propia forma del schema lo impide, no solo la lógica)."""
+
+    nombre_completo: str = Field(min_length=1)
+    email: EmailStr
+    password: str = Field(min_length=8)
+    servicios_suscriptos: list[ServicioComunicarlos] = Field(min_length=1)
+
+
 class CambiarRolRequest(BaseModel):
     """Nuevo rol a asignar a un usuario existente."""
 
