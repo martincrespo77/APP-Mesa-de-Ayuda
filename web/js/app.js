@@ -1,15 +1,14 @@
 /**
- * Portal web — Fases 1 y 2 (Solicitante y Operador): perfil del usuario
- * actual, alta de Incidente/Solicitud filtrada por servicios suscriptos, y
- * un listado/detalle de requerimientos cuyas pestañas, filtros y acciones
- * se adaptan al rol según la Matriz de Permisos de CLAUDE.md. Las
- * funciones `puede*(ticket)` son la única fuente de verdad de qué botón
- * mostrar; el backend vuelve a validar cada transición de todos modos
- * (Information Expert en las entidades de dominio), así que ocultar un
- * botón acá es una ayuda de UX, no el control de acceso real.
- * Lo específico de Técnico (mis asignaciones, derivar, resolver) y de
- * Supervisor (notificaciones, equipo supervisado, panel global) se suma
- * en las fases 3 y 4.
+ * Portal web — Fases 1 a 3 (Solicitante, Operador y Técnico): perfil del
+ * usuario actual, alta de Incidente/Solicitud filtrada por servicios
+ * suscriptos, y un listado/detalle de requerimientos cuyas pestañas,
+ * filtros y acciones se adaptan al rol según la Matriz de Permisos de
+ * CLAUDE.md. Las funciones `puede*(ticket)` son la única fuente de verdad
+ * de qué botón mostrar; el backend vuelve a validar cada transición de
+ * todos modos (Information Expert en las entidades de dominio), así que
+ * ocultar un botón acá es una ayuda de UX, no el control de acceso real.
+ * Lo específico de Supervisor (notificaciones, equipo supervisado, panel
+ * global) se suma en la Fase 4.
  */
 
 if (!exigirSesion()) {
@@ -71,8 +70,12 @@ let usuarioActual = null;
 let rolActual = null;
 let tecnicosCache = [];
 
-const ROLES_CON_BANDEJA_GENERAL = new Set(["OPERADOR", "TECNICO", "SUPERVISOR"]);
+const ROLES_BANDEJA_GENERAL_SIMPLE = new Set(["OPERADOR", "SUPERVISOR"]);
 const ROLES_LISTAN_TECNICOS = new Set(["OPERADOR", "TECNICO", "SUPERVISOR"]);
+
+// Fase 3 (Técnico): "Mis asignaciones" es la vista por defecto; "Todos los
+// tickets" reutiliza los mismos filtros avanzados de la bandeja de Operador.
+let vistaTecnico = "mis-asignaciones";
 
 function filtrarSelectoresServicio() {
     // El backend no valida hoy el cruce servicio <-> servicios_suscriptos
@@ -93,16 +96,31 @@ function filtrarSelectoresServicio() {
     });
 }
 
+function tituloSegunVistaTecnico() {
+    return vistaTecnico === "mis-asignaciones" ? "Mis asignaciones" : "Todos los tickets";
+}
+
 function aplicarRolAInterfaz() {
-    // Fase 2 (Operador): bandeja general con filtros avanzados. Técnico y
-    // Supervisor comparten esta misma vista genérica hasta que sus fases
-    // (3 y 4) agreguen sus pantallas propias (mis asignaciones, panel, etc.).
-    const esBandejaGeneral = ROLES_CON_BANDEJA_GENERAL.has(rolActual);
-    const tituloListado = esBandejaGeneral ? "Bandeja general" : "Mis requerimientos";
+    // Fase 2 (Operador, y Supervisor hasta que la Fase 4 le dé su propio
+    // panel): bandeja general con filtros avanzados, siempre "todos".
+    // Fase 3 (Técnico): "Mis asignaciones" por defecto + toggle a "Todos
+    // los tickets", que sí reutiliza esos mismos filtros avanzados.
+    const esBandejaSimple = ROLES_BANDEJA_GENERAL_SIMPLE.has(rolActual);
+    const esTecnico = rolActual === "TECNICO";
+
+    let tituloListado = "Mis requerimientos";
+    if (esBandejaSimple) tituloListado = "Bandeja general";
+    if (esTecnico) tituloListado = tituloSegunVistaTecnico();
+
     document.getElementById("pestana-boton-listado").textContent = tituloListado;
     document.getElementById("listado-titulo").textContent = tituloListado;
-    document.getElementById("filtro-estado").hidden = esBandejaGeneral;
-    document.getElementById("filtros-avanzados").hidden = !esBandejaGeneral;
+
+    document.getElementById("filtro-estado").hidden = esBandejaSimple || esTecnico;
+    document.getElementById("vista-tecnico").hidden = !esTecnico;
+    document.getElementById("filtros-avanzados").hidden = !(
+        esBandejaSimple ||
+        (esTecnico && vistaTecnico === "todos")
+    );
 
     botonCancelarTicket.textContent =
         rolActual === "SOLICITANTE" ? "Cancelar ticket" : "Cancelar / Desestimar";
@@ -275,7 +293,12 @@ function ticketPasaFiltrosAvanzados(ticket) {
 }
 
 function ticketPasaFiltro(ticket) {
-    return ROLES_CON_BANDEJA_GENERAL.has(rolActual)
+    if (rolActual === "TECNICO") {
+        return vistaTecnico === "mis-asignaciones"
+            ? esTecnicoAsignado(ticket)
+            : ticketPasaFiltrosAvanzados(ticket);
+    }
+    return ROLES_BANDEJA_GENERAL_SIMPLE.has(rolActual)
         ? ticketPasaFiltrosAvanzados(ticket)
         : ticketPasaFiltroSimple(ticket);
 }
@@ -325,15 +348,36 @@ document.querySelectorAll("#filtro-estado .chip").forEach((boton) => {
     select.addEventListener("change", renderizarListado);
 });
 
+document.querySelectorAll("#vista-tecnico .chip").forEach((boton) => {
+    boton.addEventListener("click", () => {
+        vistaTecnico = boton.dataset.vista;
+        document
+            .querySelectorAll("#vista-tecnico .chip")
+            .forEach((otro) => otro.classList.toggle("activa", otro === boton));
+        const tituloListado = tituloSegunVistaTecnico();
+        document.getElementById("pestana-boton-listado").textContent = tituloListado;
+        document.getElementById("listado-titulo").textContent = tituloListado;
+        document.getElementById("filtros-avanzados").hidden = vistaTecnico !== "todos";
+        renderizarListado();
+    });
+});
+
 // -- Modal de detalle --------------------------------------------------------------
 
 const modal = document.getElementById("modal-detalle");
 const botonIniciarAnalisis = document.getElementById("boton-iniciar-analisis");
+const botonIniciarProgreso = document.getElementById("boton-iniciar-progreso");
 const botonCancelarTicket = document.getElementById("boton-cancelar-ticket");
 const botonConfirmarCierre = document.getElementById("boton-confirmar-cierre");
 const bloqueAsignarTecnico = document.getElementById("bloque-asignar-tecnico");
 const selectAsignarTecnico = document.getElementById("asignar-tecnico-select");
 const botonAsignarTecnico = document.getElementById("boton-asignar-tecnico");
+const bloqueDerivar = document.getElementById("bloque-derivar");
+const selectDerivarTecnico = document.getElementById("derivar-tecnico-select");
+const botonDerivar = document.getElementById("boton-derivar");
+const bloqueResolver = document.getElementById("bloque-resolver");
+const resolverNota = document.getElementById("resolver-nota");
+const botonResolver = document.getElementById("boton-resolver");
 const errorDetalle = document.getElementById("error-detalle");
 const bloqueComentario = document.getElementById("bloque-comentario");
 const comentarioTexto = document.getElementById("comentario-texto");
@@ -364,6 +408,35 @@ function puedeAsignarTecnico(ticket) {
     );
 }
 
+function puedeIniciarProgreso(ticket) {
+    if (ticket.estado !== "EN_ANALISIS" || !ticket.tecnico_asignado_id) return false;
+    if (rolActual === "TECNICO") return esTecnicoAsignado(ticket);
+    return rolActual === "SUPERVISOR";
+}
+
+function puedeResolver(ticket) {
+    if (ticket.estado !== "EN_PROGRESO") return false;
+    if (rolActual === "TECNICO") return esTecnicoAsignado(ticket);
+    return rolActual === "SUPERVISOR";
+}
+
+function hayOtroTecnicoDisponible() {
+    return tecnicosCache.some((tecnico) => tecnico.id !== usuarioActual?.id);
+}
+
+function puedeDerivar(ticket) {
+    // Solo el técnico actualmente asignado deriva (Supervisor no: no es
+    // "interconsulta" si lo decide alguien fuera del circuito técnico).
+    // Sin otro técnico activo no hay a quién derivar: ocultar el bloque en
+    // vez de mostrar un <select> vacío.
+    return (
+        rolActual === "TECNICO" &&
+        esTecnicoAsignado(ticket) &&
+        ["EN_ANALISIS", "EN_PROGRESO"].includes(ticket.estado) &&
+        hayOtroTecnicoDisponible()
+    );
+}
+
 function puedeCancelar(ticket) {
     if (rolActual === "SOLICITANTE") return esDueño(ticket) && ticket.estado === "ABIERTO";
     if (rolActual === "OPERADOR" || rolActual === "SUPERVISOR") {
@@ -390,10 +463,20 @@ function filaDetalle(etiqueta, valor) {
     return `<div class="detalle-fila"><span>${etiqueta}</span><span>${valor}</span></div>`;
 }
 
-function poblarSelectTecnicos() {
-    selectAsignarTecnico.innerHTML = tecnicosCache
+function opcionesTecnicos(excluirId) {
+    return tecnicosCache
+        .filter((tecnico) => tecnico.id !== excluirId)
         .map((tecnico) => `<option value="${tecnico.id}">${tecnico.nombre_completo}</option>`)
         .join("");
+}
+
+function poblarSelectTecnicos() {
+    selectAsignarTecnico.innerHTML = opcionesTecnicos(null);
+}
+
+function poblarSelectDerivar() {
+    // El dominio rechaza derivar al mismo técnico ya asignado.
+    selectDerivarTecnico.innerHTML = opcionesTecnicos(usuarioActual?.id);
 }
 
 function mostrarDetalle(ticket) {
@@ -401,11 +484,18 @@ function mostrarDetalle(ticket) {
     errorDetalle.hidden = true;
 
     botonIniciarAnalisis.hidden = !puedeIniciarAnalisis(ticket);
+    botonIniciarProgreso.hidden = !puedeIniciarProgreso(ticket);
     botonCancelarTicket.hidden = !puedeCancelar(ticket);
     botonConfirmarCierre.hidden = !puedeCerrar(ticket);
 
     bloqueAsignarTecnico.hidden = !puedeAsignarTecnico(ticket);
     if (!bloqueAsignarTecnico.hidden) poblarSelectTecnicos();
+
+    bloqueDerivar.hidden = !puedeDerivar(ticket);
+    if (!bloqueDerivar.hidden) poblarSelectDerivar();
+
+    bloqueResolver.hidden = !puedeResolver(ticket);
+    resolverNota.value = "";
 
     bloqueComentario.hidden = !puedeComentar(ticket);
     comentarioTexto.value = "";
@@ -518,6 +608,60 @@ botonAsignarTecnico.addEventListener("click", async () => {
         errorDetalle.hidden = false;
     } finally {
         botonAsignarTecnico.disabled = false;
+    }
+});
+
+botonIniciarProgreso.addEventListener("click", () =>
+    ejecutarAccionTicket(
+        "iniciar-progreso",
+        "¿Iniciar el progreso de este ticket?",
+        botonIniciarProgreso,
+    ),
+);
+
+botonDerivar.addEventListener("click", async () => {
+    const tecnicoDestinoId = selectDerivarTecnico.value;
+    if (!tecnicoDestinoId) return;
+    if (!window.confirm("¿Derivar este ticket a otro técnico (interconsulta)?")) return;
+    errorDetalle.hidden = true;
+    botonDerivar.disabled = true;
+    try {
+        const actualizado = await apiFetchJson(`/requerimientos/${ticketActualId}/derivar`, {
+            method: "POST",
+            body: JSON.stringify({ tecnico_destino_id: tecnicoDestinoId }),
+        });
+        mostrarDetalle(actualizado);
+        cargarListado();
+    } catch (error) {
+        errorDetalle.textContent = error.message;
+        errorDetalle.hidden = false;
+    } finally {
+        botonDerivar.disabled = false;
+    }
+});
+
+botonResolver.addEventListener("click", async () => {
+    const nota = resolverNota.value.trim();
+    if (!nota) {
+        errorDetalle.textContent = "La nota de resolución es obligatoria.";
+        errorDetalle.hidden = false;
+        return;
+    }
+    if (!window.confirm("¿Marcar este ticket como resuelto?")) return;
+    errorDetalle.hidden = true;
+    botonResolver.disabled = true;
+    try {
+        const actualizado = await apiFetchJson(`/requerimientos/${ticketActualId}/resolver`, {
+            method: "POST",
+            body: JSON.stringify({ nota_resolucion: nota }),
+        });
+        mostrarDetalle(actualizado);
+        cargarListado();
+    } catch (error) {
+        errorDetalle.textContent = error.message;
+        errorDetalle.hidden = false;
+    } finally {
+        botonResolver.disabled = false;
     }
 });
 

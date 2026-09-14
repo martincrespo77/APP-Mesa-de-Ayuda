@@ -118,7 +118,13 @@
                 <button type="button" class="chip" data-filtro="finalizados">Finalizados</button>
             </div>
 
-            <!-- Filtros avanzados (Operador/Supervisor): bandeja general -->
+            <!-- Vista Técnico: Mis asignaciones (default) / Todos los tickets -->
+            <div class="filtro-estado" id="vista-tecnico" hidden>
+                <button type="button" class="chip activa" data-vista="mis-asignaciones">Mis asignaciones</button>
+                <button type="button" class="chip" data-vista="todos">Todos los tickets</button>
+            </div>
+
+            <!-- Filtros avanzados (Operador/Supervisor, y Técnico en "Todos los tickets") -->
             <div class="fila" id="filtros-avanzados" hidden style="margin-bottom: 14px;">
                 <div>
                     <label for="filtro-avanzado-estado">Estado</label>
@@ -168,6 +174,7 @@
 
             <div id="detalle-acciones" style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
                 <button id="boton-iniciar-analisis" hidden>Iniciar análisis</button>
+                <button id="boton-iniciar-progreso" hidden>Iniciar progreso</button>
                 <button class="secundario" id="boton-cancelar-ticket" hidden>Cancelar ticket</button>
                 <button id="boton-confirmar-cierre" hidden>Confirmar cierre</button>
             </div>
@@ -178,6 +185,20 @@
                     <select id="asignar-tecnico-select" style="flex: 1;"></select>
                     <button type="button" id="boton-asignar-tecnico" style="white-space: nowrap;">Asignar</button>
                 </div>
+            </div>
+
+            <div id="bloque-derivar" hidden style="margin-top: 16px;">
+                <label for="derivar-tecnico-select">Derivar a otro técnico (interconsulta)</label>
+                <div style="display: flex; gap: 10px;">
+                    <select id="derivar-tecnico-select" style="flex: 1;"></select>
+                    <button type="button" class="secundario" id="boton-derivar" style="white-space: nowrap;">Derivar</button>
+                </div>
+            </div>
+
+            <div id="bloque-resolver" hidden style="margin-top: 16px;">
+                <label for="resolver-nota">Nota de resolución técnica</label>
+                <textarea id="resolver-nota" placeholder="Describí la solución aplicada…"></textarea>
+                <button type="button" id="boton-resolver" style="margin-top: 10px;">Resolver ticket</button>
             </div>
 
             <p class="error" id="error-detalle" hidden></p>
