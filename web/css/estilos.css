@@ -207,6 +207,10 @@ header.encabezado {
     border-color: var(--acento-azul);
 }
 
+.ticket-alerta {
+    border-left: 4px solid var(--rojo);
+}
+
 .ticket-encabezado {
     display: flex;
     justify-content: space-between;
@@ -329,5 +333,11 @@ header.encabezado {
 
     .fila {
         flex-direction: column;
+    }
+
+    /* En columna, "flex-basis: 200px" (pensado para el ancho en fila) pasa
+       a leerse como alto mínimo y deja huecos enormes debajo de cada campo. */
+    .fila > * {
+        flex-basis: auto;
     }
 }

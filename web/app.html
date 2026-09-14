@@ -24,7 +24,7 @@
 
         <nav class="pestanas">
             <button class="pestana activa" data-pestana="nuevo">Nuevo requerimiento</button>
-            <button class="pestana" data-pestana="listado">Mis requerimientos</button>
+            <button class="pestana" data-pestana="listado" id="pestana-boton-listado">Mis requerimientos</button>
         </nav>
 
         <!-- Pestaña: Nuevo requerimiento -->
@@ -107,14 +107,51 @@
         <!-- Pestaña: Listado -->
         <section id="pestana-listado" hidden>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-                <h2 style="margin: 0;">Mis requerimientos</h2>
+                <h2 style="margin: 0;" id="listado-titulo">Mis requerimientos</h2>
                 <button class="secundario" id="boton-refrescar">Refrescar</button>
             </div>
+
+            <!-- Filtro simple (Solicitante): Todos/Activos/Finalizados -->
             <div class="filtro-estado" id="filtro-estado">
                 <button type="button" class="chip activa" data-filtro="todos">Todos</button>
                 <button type="button" class="chip" data-filtro="activos">Activos</button>
                 <button type="button" class="chip" data-filtro="finalizados">Finalizados</button>
             </div>
+
+            <!-- Filtros avanzados (Operador/Supervisor): bandeja general -->
+            <div class="fila" id="filtros-avanzados" hidden style="margin-bottom: 14px;">
+                <div>
+                    <label for="filtro-avanzado-estado">Estado</label>
+                    <select id="filtro-avanzado-estado">
+                        <option value="">Todos</option>
+                        <option value="ABIERTO">Abierto</option>
+                        <option value="EN_ANALISIS">En análisis</option>
+                        <option value="EN_PROGRESO">En progreso</option>
+                        <option value="RESUELTO">Resuelto</option>
+                        <option value="CERRADO">Cerrado</option>
+                        <option value="CANCELADO">Cancelado</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="filtro-avanzado-urgencia">Urgencia</label>
+                    <select id="filtro-avanzado-urgencia">
+                        <option value="">Todas</option>
+                        <option value="MENOR">Menor</option>
+                        <option value="IMPORTANTE">Importante</option>
+                        <option value="CRITICO">Crítico</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="filtro-avanzado-servicio">Servicio</label>
+                    <select id="filtro-avanzado-servicio">
+                        <option value="">Todos</option>
+                        <option value="TELEFONIA_CELULAR">Telefonía celular</option>
+                        <option value="INTERNET_BANDA_ANCHA">Internet de banda ancha</option>
+                        <option value="TELEVISION">Televisión</option>
+                    </select>
+                </div>
+            </div>
+
             <p class="error" id="error-listado" hidden></p>
             <div class="lista-tickets" id="lista-tickets"></div>
         </section>
@@ -130,9 +167,19 @@
             <div id="detalle-cuerpo"></div>
 
             <div id="detalle-acciones" style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button id="boton-iniciar-analisis" hidden>Iniciar análisis</button>
                 <button class="secundario" id="boton-cancelar-ticket" hidden>Cancelar ticket</button>
                 <button id="boton-confirmar-cierre" hidden>Confirmar cierre</button>
             </div>
+
+            <div id="bloque-asignar-tecnico" hidden style="margin-top: 16px;">
+                <label for="asignar-tecnico-select">Asignar técnico</label>
+                <div style="display: flex; gap: 10px;">
+                    <select id="asignar-tecnico-select" style="flex: 1;"></select>
+                    <button type="button" id="boton-asignar-tecnico" style="white-space: nowrap;">Asignar</button>
+                </div>
+            </div>
+
             <p class="error" id="error-detalle" hidden></p>
 
             <div id="bloque-comentario" style="margin-top: 20px;">
