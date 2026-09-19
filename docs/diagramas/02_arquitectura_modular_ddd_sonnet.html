@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mesa de Ayuda Comunicarlos — Arquitectura Modular DDD-lite (Sonnet)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #080c14;
+    color: #e2e8f0;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  #topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 52px;
+    background: #0f172a;
+    border-bottom: 1px solid #1e293b;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 12px;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  #topbar h1 {
+    font-size: 14px;
+    color: #38bdf8;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #topbar h1 .badge {
+    background: #1e293b;
+    color: #94a3b8;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid #334155;
+  }
+  #searchBox {
+    width: 250px;
+    padding: 6px 12px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #f8fafc;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #searchBox:focus { border-color: #38bdf8; }
+  
+  .filter-group {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+  }
+  .btn {
+    padding: 5px 11px;
+    border-radius: 5px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+  .btn:hover { background: #273549; color: #f1f5f9; }
+  .btn.active {
+    background: #0369a1;
+    border-color: #38bdf8;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+  }
+  .btn-danger { border-color: #dc2626; color: #f87171; }
+  .btn-danger:hover { background: #450a0a; }
+
+  #canvas {
+    position: absolute;
+    top: 52px; left: 0; right: 0; bottom: 0;
+    overflow: auto;
+    cursor: grab;
+    background: radial-gradient(circle at 1px 1px, #172033 1px, transparent 0);
+    background-size: 32px 32px;
+  }
+  #canvas.grabbing { cursor: grabbing; }
+  
+  #world {
+    position: relative;
+    width: 4500px;
+    height: 2500px;
+    transform-origin: 0 0;
+  }
+
+  #connections {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  .subgraph-zone {
+    position: absolute;
+    border: 1.5px dashed;
+    border-radius: 12px;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .subgraph-label {
+    position: absolute;
+    top: -12px; left: 16px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 2px 10px;
+    border-radius: 4px;
+    background: #0f172a;
+    border: 1px solid;
+  }
+
+  .node {
+    position: absolute;
+    z-index: 10;
+    cursor: move;
+    user-select: none;
+    transition: transform 0.1s, box-shadow 0.2s, opacity 0.2s;
+  }
+  .node.highlight {
+    box-shadow: 0 0 25px #f59e0b !important;
+    border-radius: 8px;
+  }
+  .node.dimmed { opacity: 0.18; }
+
+  .comp-card {
+    background: #0f172a;
+    border: 2px solid;
+    border-radius: 8px;
+    width: 280px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .comp-header {
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .comp-icon { font-size: 20px; }
+  .comp-title-group { display: flex; flex-direction: column; overflow: hidden; }
+  .comp-id { font-size: 10px; font-family: monospace; color: #94a3b8; font-weight: 700; }
+  .comp-name { font-size: 13px; font-weight: 700; color: #f8fafc; line-height: 1.2; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+  .comp-body {
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.6);
+  }
+  .comp-sub { font-size: 10px; color: #94a3b8; }
+  .comp-tag {
+    font-size: 9px;
+    background: #1e293b;
+    color: #cbd5e1;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #334155;
+  }
+
+  .conn-path {
+    fill: none;
+    stroke: #38bdf8;
+    stroke-width: 1.8;
+  }
+  .conn-path.dashed { stroke: #a78bfa; stroke-dasharray: 6, 4; }
+  .conn-path.thick { stroke: #10b981; stroke-width: 2.4; }
+  .conn-label-bg {
+    fill: #0f172a;
+    stroke: #334155;
+    stroke-width: 1;
+    rx: 4;
+  }
+  .conn-label-text {
+    font-size: 9.5px;
+    font-family: monospace;
+    font-weight: 600;
+    fill: #94a3b8;
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+
+  #modalOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 7, 13, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+  }
+  #modalOverlay.show { display: flex; }
+  #modalCard {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 720px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+  }
+  #modalHeader {
+    padding: 14px 20px;
+    border-bottom: 1px solid #1e293b;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #modalTitle { font-size: 16px; font-weight: 700; color: #38bdf8; }
+  #modalBody {
+    padding: 18px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .modal-sec {
+    background: #111827;
+    border: 1px solid #1f2937;
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .modal-sec-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #38bdf8;
+    margin-bottom: 6px;
+  }
+  .modal-list { list-style: none; }
+  .modal-list li { font-size: 12px; color: #cbd5e1; padding: 3px 0; }
+
+  #minimap {
+    position: fixed;
+    bottom: 16px; right: 16px;
+    width: 220px; height: 110px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    z-index: 900;
+    overflow: hidden;
+  }
+  #minimapViewport {
+    position: absolute;
+    border: 1px solid #38bdf8;
+    background: rgba(56, 189, 248, 0.2);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1><span>Mesa de Ayuda Comunicarlos — Arquitectura Modular DDD-lite (Sonnet)</span> <span class="badge">Interactivo Air-Gapped</span></h1>
+  <input type="text" id="searchBox" placeholder="Buscar componente o módulo...">
+  <div class="filter-group" id="filterGroup">
+    <button class="btn active" data-sub="all">Todos</button>
+  </div>
+  <button class="btn btn-danger" id="resetBtn">Restaurar Vista</button>
+</div>
+
+<div id="canvas">
+  <div id="world">
+    <svg id="connections">
+      <defs>
+        <marker id="arrow" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+          <polygon points="0 0, 9 3.5, 0 7" fill="#38bdf8"/>
+        </marker>
+        <marker id="arrow-dashed" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+          <polygon points="0 0, 9 3.5, 0 7" fill="#a78bfa"/>
+        </marker>
+        <marker id="arrow-thick" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+          <polygon points="0 0, 9 3.5, 0 7" fill="#10b981"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+</div>
+
+<div id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div id="modalCard">
+    <div id="modalHeader">
+      <div id="modalTitle">Detalle</div>
+      <button class="btn btn-danger" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<div id="minimap"><div id="minimapViewport"></div></div>
+
+<script>
+const nodesData = [{"id": "pres_main", "title": "app/main.py - FastAPI · lifespan · include_router x4 · mount estatico", "raw_label": "app/main.py<br/>FastAPI · lifespan · include_router x4 · mount estatico", "shape": "round", "subgraph": "sg_presentacion", "x": 80, "y": 70, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">pres_main</span>\n                        <span class=\"comp-name\">app/main.py - FastAPI · lifespan · include_router x4 · mount estatico</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_presentacion</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "pres_router_usr", "title": "[\"usuarios/router.py - login · registro · me · tecnicos · POST/GET · PATCH rol/activar/desactivar\"", "raw_label": "[\"usuarios/router.py<br/>login · registro · me · tecnicos · POST/GET · PATCH rol/activar/desactivar\"", "shape": "rect", "subgraph": "sg_presentacion", "x": 80, "y": 200, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">pres_router_usr</span>\n                        <span class=\"comp-name\">[\"usuarios/router.py - login · registro · me · tecnicos · POST/GET · PATCH rol/activar/desactivar\"</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_presentacion</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "pres_router_req", "title": "[\"requerimientos/router.py - crear · listar · obtener · iniciar-analisis · asignar-tecnico · iniciar-progreso · resolver · cerrar · cancelar · comentarios · derivar\"", "raw_label": "[\"requerimientos/router.py<br/>crear · listar · obtener · iniciar-analisis · asignar-tecnico · iniciar-progreso · resolver · cerrar · cancelar · comentarios · derivar\"", "shape": "rect", "subgraph": "sg_presentacion", "x": 80, "y": 330, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">pres_router_req</span>\n                        <span class=\"comp-name\">[\"requerimientos/router.py - crear · listar · obtener · iniciar-analisis · asignar-tecnico · iniciar-progreso · resolver · cerrar · cancelar · comentarios · derivar\"</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_presentacion</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "pres_router_sup", "title": "[\"supervision/router.py - POST / DELETE /{supervisado_id} / GET · router-level requerir_rol(SUPERVISOR)\"", "raw_label": "[\"supervision/router.py<br/>POST / DELETE /{supervisado_id} / GET · router-level requerir_rol(SUPERVISOR)\"", "shape": "rect", "subgraph": "sg_presentacion", "x": 80, "y": 460, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">pres_router_sup</span>\n                        <span class=\"comp-name\">[\"supervision/router.py - POST / DELETE /{supervisado_id} / GET · router-level requerir_rol(SUPERVISOR)\"</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_presentacion</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "pres_router_notif", "title": "[\"notificaciones/router.py - GET · PATCH /{id}/leida · router-level requerir_rol(SUPERVISOR)\"", "raw_label": "[\"notificaciones/router.py<br/>GET · PATCH /{id}/leida · router-level requerir_rol(SUPERVISOR)\"", "shape": "rect", "subgraph": "sg_presentacion", "x": 80, "y": 590, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">pres_router_notif</span>\n                        <span class=\"comp-name\">[\"notificaciones/router.py - GET · PATCH /{id}/leida · router-level requerir_rol(SUPERVISOR)\"</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_presentacion</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "pres_schemas_usr", "title": "usuarios/schemas.py - UsuarioCreateRequest · RegistroSolicitanteRequest · CambiarRolRequest · UsuarioResponse · TecnicoResponse · TokenResponse", "raw_label": "usuarios/schemas.py<br/>UsuarioCreateRequest · RegistroSolicitanteRequest · CambiarRolRequest · UsuarioResponse · TecnicoResponse · TokenResponse", "shape": "parallelogram", "subgraph": "sg_presentacion", "x": 80, "y": 720, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">pres_schemas_usr</span>\n                        <span class=\"comp-name\">usuarios/schemas.py - UsuarioCreateRequest · RegistroSolicitanteRequest · CambiarRolRequest · UsuarioResponse · TecnicoResponse · TokenResponse</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_presentacion</span>\n                    <span class=\"comp-tag\">parallelogram</span>\n                </div>\n            </div>\n            "}, {"id": "pres_schemas_req", "title": "requerimientos/schemas.py - Crear(Incidente|Solicitud)Request · Asignar/Resolver/Comentario/DerivarRequest · (Incidente|Solicitud)Response · Evento/ComentarioResponse · Discriminated Union por 'tipo'", "raw_label": "requerimientos/schemas.py<br/>Crear(Incidente|Solicitud)Request · Asignar/Resolver/Comentario/DerivarRequest · (Incidente|Solicitud)Response · Evento/ComentarioResponse · Discriminated Union por 'tipo'", "shape": "parallelogram", "subgraph": "sg_presentacion", "x": 80, "y": 850, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">pres_schemas_req</span>\n                        <span class=\"comp-name\">requerimientos/schemas.py - Crear(Incidente|Solicitud)Request · Asignar/Resolver/Comentario/DerivarRequest · (Incidente|Solicitud)Response · Evento/ComentarioResponse · Discriminated Union por 'tipo'</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_presentacion</span>\n                    <span class=\"comp-tag\">parallelogram</span>\n                </div>\n            </div>\n            "}, {"id": "pres_schemas_sup", "title": "supervision/schemas.py - AsignarSupervisionRequest · RelacionSupervisionResponse", "raw_label": "supervision/schemas.py<br/>AsignarSupervisionRequest · RelacionSupervisionResponse", "shape": "parallelogram", "subgraph": "sg_presentacion", "x": 80, "y": 980, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">pres_schemas_sup</span>\n                        <span class=\"comp-name\">supervision/schemas.py - AsignarSupervisionRequest · RelacionSupervisionResponse</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_presentacion</span>\n                    <span class=\"comp-tag\">parallelogram</span>\n                </div>\n            </div>\n            "}, {"id": "pres_schemas_notif", "title": "notificaciones/schemas.py - NotificacionResponse", "raw_label": "notificaciones/schemas.py<br/>NotificacionResponse", "shape": "parallelogram", "subgraph": "sg_presentacion", "x": 80, "y": 1110, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">pres_schemas_notif</span>\n                        <span class=\"comp-name\">notificaciones/schemas.py - NotificacionResponse</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_presentacion</span>\n                    <span class=\"comp-tag\">parallelogram</span>\n                </div>\n            </div>\n            "}, {"id": "comp_deps", "title": "app/deps.py - obtener_repositorio_* x4 · obtener_servicio_* x4 · obtener_despachador_eventos · obtener_usuario_actual · requerir_rol", "raw_label": "app/deps.py<br/>obtener_repositorio_* x4 · obtener_servicio_* x4 · obtener_despachador_eventos · obtener_usuario_actual · requerir_rol", "shape": "rect", "subgraph": "sg_composicion", "x": 540, "y": 70, "meta": {}, "color": {"border": "#3b82f6", "bg": "#1e3a8a", "text": "#60a5fa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#3b82f6;\">\n                <div class=\"comp-header\" style=\"background:#1e3a8a;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">comp_deps</span>\n                        <span class=\"comp-name\">app/deps.py - obtener_repositorio_* x4 · obtener_servicio_* x4 · obtener_despachador_eventos · obtener_usuario_actual · requerir_rol</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_composicion</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "comp_auth", "title": "app/auth.py - bcrypt (obtener_password_hash / verificar_password) · JWT (crear_token_acceso / decodificar_token) · TokenInvalidoError", "raw_label": "app/auth.py<br/>bcrypt (obtener_password_hash / verificar_password) · JWT (crear_token_acceso / decodificar_token) · TokenInvalidoError", "shape": "rect", "subgraph": "sg_composicion", "x": 540, "y": 200, "meta": {}, "color": {"border": "#3b82f6", "bg": "#1e3a8a", "text": "#60a5fa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#3b82f6;\">\n                <div class=\"comp-header\" style=\"background:#1e3a8a;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">comp_auth</span>\n                        <span class=\"comp-name\">app/auth.py - bcrypt (obtener_password_hash / verificar_password) · JWT (crear_token_acceso / decodificar_token) · TokenInvalidoError</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_composicion</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "comp_config", "title": "app/config.py::Settings + get_settings() @lru_cache - fail-fast si faltan SECRET_KEY / MONGODB_URL / MONGODB_DB_NAME", "raw_label": "app/config.py::Settings + get_settings() @lru_cache<br/>fail-fast si faltan SECRET_KEY / MONGODB_URL / MONGODB_DB_NAME", "shape": "parallelogram", "subgraph": "sg_composicion", "x": 540, "y": 330, "meta": {}, "color": {"border": "#3b82f6", "bg": "#1e3a8a", "text": "#60a5fa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#3b82f6;\">\n                <div class=\"comp-header\" style=\"background:#1e3a8a;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">comp_config</span>\n                        <span class=\"comp-name\">app/config.py::Settings + get_settings() @lru_cache - fail-fast si faltan SECRET_KEY / MONGODB_URL / MONGODB_DB_NAME</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_composicion</span>\n                    <span class=\"comp-tag\">parallelogram</span>\n                </div>\n            </div>\n            "}, {"id": "requerir_rol", "title": "*roles", "raw_label": "*roles", "shape": "round", "subgraph": "sg_composicion", "x": 540, "y": 460, "meta": {}, "color": {"border": "#3b82f6", "bg": "#1e3a8a", "text": "#60a5fa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#3b82f6;\">\n                <div class=\"comp-header\" style=\"background:#1e3a8a;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">requerir_rol</span>\n                        <span class=\"comp-name\">*roles</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_composicion</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "app_srv_usr", "title": "ServicioUsuarios (usuarios/servicios.py) - registrar · autenticar · obtener_por_id/email · listar_todos · listar_tecnicos_activos · activar · desactivar · cambiar_rol", "raw_label": "ServicioUsuarios (usuarios/servicios.py)<br/>registrar · autenticar · obtener_por_id/email · listar_todos · listar_tecnicos_activos · activar · desactivar · cambiar_rol", "shape": "round", "subgraph": "sg_aplicacion", "x": 1000, "y": 70, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">app_srv_usr</span>\n                        <span class=\"comp-name\">ServicioUsuarios (usuarios/servicios.py) - registrar · autenticar · obtener_por_id/email · listar_todos · listar_tecnicos_activos · activar · desactivar · cambiar_rol</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_aplicacion</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "app_srv_req", "title": "ServicioRequerimientos (requerimientos/servicios.py) - crear · obtener_visible_para · listar_visibles_para · iniciar_analisis · asignar_tecnico · iniciar_progreso · resolver · cerrar · cancelar · agregar_comentario · derivar_interconsulta · _aplicar_transicion", "raw_label": "ServicioRequerimientos (requerimientos/servicios.py)<br/>crear · obtener_visible_para · listar_visibles_para · iniciar_analisis · asignar_tecnico · iniciar_progreso · resolver · cerrar · cancelar · agregar_comentario · derivar_interconsulta · _aplicar_transicion", "shape": "round", "subgraph": "sg_aplicacion", "x": 1000, "y": 200, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">app_srv_req</span>\n                        <span class=\"comp-name\">ServicioRequerimientos (requerimientos/servicios.py) - crear · obtener_visible_para · listar_visibles_para · iniciar_analisis · asignar_tecnico · iniciar_progreso · resolver · cerrar · cancelar · agregar_comentario · derivar_interconsulta · _aplicar_transicion</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_aplicacion</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "app_srv_sup", "title": "ServicioSupervision (supervision/servicios.py) - asignar (valida rol supervisable) · remover · listar_supervisados_de", "raw_label": "ServicioSupervision (supervision/servicios.py)<br/>asignar (valida rol supervisable) · remover · listar_supervisados_de", "shape": "round", "subgraph": "sg_aplicacion", "x": 1000, "y": 330, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">app_srv_sup</span>\n                        <span class=\"comp-name\">ServicioSupervision (supervision/servicios.py) - asignar (valida rol supervisable) · remover · listar_supervisados_de</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_aplicacion</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "app_srv_notif", "title": "ServicioNotificaciones (notificaciones/servicios.py) - listar_mias · marcar_leida (exige pertenencia)", "raw_label": "ServicioNotificaciones (notificaciones/servicios.py)<br/>listar_mias · marcar_leida (exige pertenencia)", "shape": "round", "subgraph": "sg_aplicacion", "x": 1000, "y": 460, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">app_srv_notif</span>\n                        <span class=\"comp-name\">ServicioNotificaciones (notificaciones/servicios.py) - listar_mias · marcar_leida (exige pertenencia)</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_aplicacion</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "dom_compartido", "title": "compartido/dominio.py - RolUsuario · ServicioComunicarlos (Shared Kernel)", "raw_label": "compartido/dominio.py<br/>RolUsuario · ServicioComunicarlos (Shared Kernel)", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 70, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_compartido</span>\n                        <span class=\"comp-name\">compartido/dominio.py - RolUsuario · ServicioComunicarlos (Shared Kernel)</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_error_base", "title": "compartido/excepciones.py::DominioError - raiz de toda excepcion de negocio", "raw_label": "compartido/excepciones.py::DominioError<br/>raiz de toda excepcion de negocio", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 200, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_error_base</span>\n                        <span class=\"comp-name\">compartido/excepciones.py::DominioError - raiz de toda excepcion de negocio</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_requerimiento", "title": "requerimientos/dominio/base.py::Requerimiento (ABC) - Information Expert: valida estado + rol + identidad", "raw_label": "requerimientos/dominio/base.py::Requerimiento (ABC)<br/>Information Expert: valida estado + rol + identidad", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 330, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_requerimiento</span>\n                        <span class=\"comp-name\">requerimientos/dominio/base.py::Requerimiento (ABC) - Information Expert: valida estado + rol + identidad</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_incidente", "title": "dominio/incidente.py::Incidente - + UrgenciaIncidente · CategoriaIncidente", "raw_label": "dominio/incidente.py::Incidente<br/>+ UrgenciaIncidente · CategoriaIncidente", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 460, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_incidente</span>\n                        <span class=\"comp-name\">dominio/incidente.py::Incidente - + UrgenciaIncidente · CategoriaIncidente</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_solicitud", "title": "dominio/solicitud.py::Solicitud - + CategoriaSolicitud", "raw_label": "dominio/solicitud.py::Solicitud<br/>+ CategoriaSolicitud", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 590, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_solicitud</span>\n                        <span class=\"comp-name\">dominio/solicitud.py::Solicitud - + CategoriaSolicitud</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_comentario", "title": "dominio/comentario.py::Comentario (frozen dataclass) - embebido en el agregado", "raw_label": "dominio/comentario.py::Comentario (frozen dataclass)<br/>embebido en el agregado", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 720, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_comentario</span>\n                        <span class=\"comp-name\">dominio/comentario.py::Comentario (frozen dataclass) - embebido en el agregado</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_estados", "title": "dominio/estados.py - EstadoRequerimiento (6) · TipoRequerimiento (2)", "raw_label": "dominio/estados.py<br/>EstadoRequerimiento (6) · TipoRequerimiento (2)", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 850, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_estados</span>\n                        <span class=\"comp-name\">dominio/estados.py - EstadoRequerimiento (6) · TipoRequerimiento (2)</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_eventos", "title": "requerimientos/eventos.py - EventoRequerimiento (frozen) · TipoEventoRequerimiento (9)", "raw_label": "requerimientos/eventos.py<br/>EventoRequerimiento (frozen) · TipoEventoRequerimiento (9)", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 980, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_eventos</span>\n                        <span class=\"comp-name\">requerimientos/eventos.py - EventoRequerimiento (frozen) · TipoEventoRequerimiento (9)</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_fabrica", "title": "requerimientos/fabrica.py::FabricaRequerimientos - Factory Method: crear · reconstruir · registrar_tipo", "raw_label": "requerimientos/fabrica.py::FabricaRequerimientos<br/>Factory Method: crear · reconstruir · registrar_tipo", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 1110, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_fabrica</span>\n                        <span class=\"comp-name\">requerimientos/fabrica.py::FabricaRequerimientos - Factory Method: crear · reconstruir · registrar_tipo</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_usuario", "title": "usuarios/dominio.py::Usuario - activar · desactivar · cambiar_rol · registrar_acceso · email corporativo · suscripciones", "raw_label": "usuarios/dominio.py::Usuario<br/>activar · desactivar · cambiar_rol · registrar_acceso · email corporativo · suscripciones", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 1240, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_usuario</span>\n                        <span class=\"comp-name\">usuarios/dominio.py::Usuario - activar · desactivar · cambiar_rol · registrar_acceso · email corporativo · suscripciones</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_relacion_sup", "title": "supervision/dominio.py::RelacionSupervision - invariante: nadie se supervisa a si mismo", "raw_label": "supervision/dominio.py::RelacionSupervision<br/>invariante: nadie se supervisa a si mismo", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 1370, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_relacion_sup</span>\n                        <span class=\"comp-name\">supervision/dominio.py::RelacionSupervision - invariante: nadie se supervisa a si mismo</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_notificacion", "title": "notificaciones/dominio.py::Notificacion - marcar_leida (idempotente)", "raw_label": "notificaciones/dominio.py::Notificacion<br/>marcar_leida (idempotente)", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 1500, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_notificacion</span>\n                        <span class=\"comp-name\">notificaciones/dominio.py::Notificacion - marcar_leida (idempotente)</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_exc_req", "title": "requerimientos/excepciones.py - TransicionInvalida · TecnicoNoAsignado · NotaResolucionRequerida · PermisoDenegado · RequerimientoNoEncontrado", "raw_label": "requerimientos/excepciones.py<br/>TransicionInvalida · TecnicoNoAsignado · NotaResolucionRequerida · PermisoDenegado · RequerimientoNoEncontrado", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 1630, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_exc_req</span>\n                        <span class=\"comp-name\">requerimientos/excepciones.py - TransicionInvalida · TecnicoNoAsignado · NotaResolucionRequerida · PermisoDenegado · RequerimientoNoEncontrado</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_exc_usr", "title": "usuarios/excepciones.py - UsuarioYaActivo/Inactivo · NoEncontrado · EmailYaRegistrado · EmailCorporativoRequerido · SuscripcionRequerida · CredencialesInvalidas", "raw_label": "usuarios/excepciones.py<br/>UsuarioYaActivo/Inactivo · NoEncontrado · EmailYaRegistrado · EmailCorporativoRequerido · SuscripcionRequerida · CredencialesInvalidas", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 1760, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_exc_usr</span>\n                        <span class=\"comp-name\">usuarios/excepciones.py - UsuarioYaActivo/Inactivo · NoEncontrado · EmailYaRegistrado · EmailCorporativoRequerido · SuscripcionRequerida · CredencialesInvalidas</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_exc_sup", "title": "supervision/excepciones.py - RelacionInvalida · RelacionYaExiste · RolNoSupervisable", "raw_label": "supervision/excepciones.py<br/>RelacionInvalida · RelacionYaExiste · RolNoSupervisable", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 1890, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_exc_sup</span>\n                        <span class=\"comp-name\">supervision/excepciones.py - RelacionInvalida · RelacionYaExiste · RolNoSupervisable</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "dom_exc_notif", "title": "notificaciones/excepciones.py - NotificacionNoEncontrada", "raw_label": "notificaciones/excepciones.py<br/>NotificacionNoEncontrada", "shape": "rect", "subgraph": "sg_dominio", "x": 1460, "y": 2020, "meta": {}, "color": {"border": "#10b981", "bg": "#064e3b", "text": "#34d399"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#10b981;\">\n                <div class=\"comp-header\" style=\"background:#064e3b;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">dom_exc_notif</span>\n                        <span class=\"comp-name\">notificaciones/excepciones.py - NotificacionNoEncontrada</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_dominio</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "port_repo_usr", "title": "usuarios/repositorio.py::RepositorioUsuarios (ABC) - guardar · buscar_por_id · buscar_por_email · listar_todos", "raw_label": "usuarios/repositorio.py::RepositorioUsuarios (ABC)<br/>guardar · buscar_por_id · buscar_por_email · listar_todos", "shape": "rect", "subgraph": "sg_puertos", "x": 1920, "y": 70, "meta": {}, "color": {"border": "#f59e0b", "bg": "#78350f", "text": "#fbbf24"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#f59e0b;\">\n                <div class=\"comp-header\" style=\"background:#78350f;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">port_repo_usr</span>\n                        <span class=\"comp-name\">usuarios/repositorio.py::RepositorioUsuarios (ABC) - guardar · buscar_por_id · buscar_por_email · listar_todos</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_puertos</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "port_repo_req", "title": "requerimientos/repositorio.py::RepositorioRequerimientos (ABC) - guardar · buscar_por_id · listar_todos · listar_por_solicitante", "raw_label": "requerimientos/repositorio.py::RepositorioRequerimientos (ABC)<br/>guardar · buscar_por_id · listar_todos · listar_por_solicitante", "shape": "rect", "subgraph": "sg_puertos", "x": 1920, "y": 200, "meta": {}, "color": {"border": "#f59e0b", "bg": "#78350f", "text": "#fbbf24"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#f59e0b;\">\n                <div class=\"comp-header\" style=\"background:#78350f;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">port_repo_req</span>\n                        <span class=\"comp-name\">requerimientos/repositorio.py::RepositorioRequerimientos (ABC) - guardar · buscar_por_id · listar_todos · listar_por_solicitante</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_puertos</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "port_repo_sup", "title": "supervision/repositorio.py::RepositorioSupervision (ABC) - asignar · remover · existe · listar_supervisados_de · listar_supervisores_de", "raw_label": "supervision/repositorio.py::RepositorioSupervision (ABC)<br/>asignar · remover · existe · listar_supervisados_de · listar_supervisores_de", "shape": "rect", "subgraph": "sg_puertos", "x": 1920, "y": 330, "meta": {}, "color": {"border": "#f59e0b", "bg": "#78350f", "text": "#fbbf24"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#f59e0b;\">\n                <div class=\"comp-header\" style=\"background:#78350f;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">port_repo_sup</span>\n                        <span class=\"comp-name\">supervision/repositorio.py::RepositorioSupervision (ABC) - asignar · remover · existe · listar_supervisados_de · listar_supervisores_de</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_puertos</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "port_repo_notif", "title": "notificaciones/repositorio.py::RepositorioNotificaciones (ABC) - guardar · buscar_por_id · listar_por_supervisor", "raw_label": "notificaciones/repositorio.py::RepositorioNotificaciones (ABC)<br/>guardar · buscar_por_id · listar_por_supervisor", "shape": "rect", "subgraph": "sg_puertos", "x": 1920, "y": 460, "meta": {}, "color": {"border": "#f59e0b", "bg": "#78350f", "text": "#fbbf24"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#f59e0b;\">\n                <div class=\"comp-header\" style=\"background:#78350f;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">port_repo_notif</span>\n                        <span class=\"comp-name\">notificaciones/repositorio.py::RepositorioNotificaciones (ABC) - guardar · buscar_por_id · listar_por_supervisor</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_puertos</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "port_observador", "title": "notificaciones/observador.py::ObservadorRequerimiento (ABC) - actualizar(evento)", "raw_label": "notificaciones/observador.py::ObservadorRequerimiento (ABC)<br/>actualizar(evento)", "shape": "rect", "subgraph": "sg_puertos", "x": 1920, "y": 590, "meta": {}, "color": {"border": "#f59e0b", "bg": "#78350f", "text": "#fbbf24"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#f59e0b;\">\n                <div class=\"comp-header\" style=\"background:#78350f;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">port_observador</span>\n                        <span class=\"comp-name\">notificaciones/observador.py::ObservadorRequerimiento (ABC) - actualizar(evento)</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_puertos</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "obs_despachador", "title": "notificaciones/despachador.py::DespachadorEventos - suscribir · desuscribir · notificar · Sujeto/Observable · instancia NUEVA por request", "raw_label": "notificaciones/despachador.py::DespachadorEventos<br/>suscribir · desuscribir · notificar · Sujeto/Observable · instancia NUEVA por request", "shape": "round", "subgraph": "sg_observer", "x": 2380, "y": 70, "meta": {}, "color": {"border": "#ef4444", "bg": "#7f1d1d", "text": "#f87171"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#ef4444;\">\n                <div class=\"comp-header\" style=\"background:#7f1d1d;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">obs_despachador</span>\n                        <span class=\"comp-name\">notificaciones/despachador.py::DespachadorEventos - suscribir · desuscribir · notificar · Sujeto/Observable · instancia NUEVA por request</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_observer</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "obs_logger", "title": "notificaciones/observador_logger.py::ObservadorLogger - logger 'mesa_de_ayuda.auditoria' · solo stdlib", "raw_label": "notificaciones/observador_logger.py::ObservadorLogger<br/>logger 'mesa_de_ayuda.auditoria' · solo stdlib", "shape": "rect", "subgraph": "sg_observer", "x": 2380, "y": 200, "meta": {}, "color": {"border": "#ef4444", "bg": "#7f1d1d", "text": "#f87171"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#ef4444;\">\n                <div class=\"comp-header\" style=\"background:#7f1d1d;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">obs_logger</span>\n                        <span class=\"comp-name\">notificaciones/observador_logger.py::ObservadorLogger - logger 'mesa_de_ayuda.auditoria' · solo stdlib</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_observer</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "obs_mongo", "title": "infraestructura/observador_notificaciones.py::ObservadorNotificacionesMongo - si autor es OPERADOR/TECNICO -> 1 Notificacion por supervisor", "raw_label": "infraestructura/observador_notificaciones.py::ObservadorNotificacionesMongo<br/>si autor es OPERADOR/TECNICO -> 1 Notificacion por supervisor", "shape": "rect", "subgraph": "sg_observer", "x": 2380, "y": 330, "meta": {}, "color": {"border": "#ef4444", "bg": "#7f1d1d", "text": "#f87171"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#ef4444;\">\n                <div class=\"comp-header\" style=\"background:#7f1d1d;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">obs_mongo</span>\n                        <span class=\"comp-name\">infraestructura/observador_notificaciones.py::ObservadorNotificacionesMongo - si autor es OPERADOR/TECNICO -> 1 Notificacion por supervisor</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_observer</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "infra_db", "title": "infraestructura/database.py - crear_cliente_mongo · obtener_base_datos · crear_indices · 4 constantes COLECCION_*", "raw_label": "infraestructura/database.py<br/>crear_cliente_mongo · obtener_base_datos · crear_indices · 4 constantes COLECCION_*", "shape": "rect", "subgraph": "sg_infraestructura", "x": 2840, "y": 70, "meta": {}, "color": {"border": "#ec4899", "bg": "#831843", "text": "#f472b6"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#ec4899;\">\n                <div class=\"comp-header\" style=\"background:#831843;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">infra_db</span>\n                        <span class=\"comp-name\">infraestructura/database.py - crear_cliente_mongo · obtener_base_datos · crear_indices · 4 constantes COLECCION_*</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_infraestructura</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "infra_repo_usr", "title": "RepositorioUsuariosMongo - _id = str(UUID) · replace_one upsert", "raw_label": "RepositorioUsuariosMongo<br/>_id = str(UUID) · replace_one upsert", "shape": "rect", "subgraph": "sg_infraestructura", "x": 2840, "y": 200, "meta": {}, "color": {"border": "#ec4899", "bg": "#831843", "text": "#f472b6"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#ec4899;\">\n                <div class=\"comp-header\" style=\"background:#831843;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">infra_repo_usr</span>\n                        <span class=\"comp-name\">RepositorioUsuariosMongo - _id = str(UUID) · replace_one upsert</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_infraestructura</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "infra_repo_req", "title": "RepositorioRequerimientosMongo - _SERIALIZADORES / _DESERIALIZADORES por TipoRequerimiento · historial y comentarios embebidos", "raw_label": "RepositorioRequerimientosMongo<br/>_SERIALIZADORES / _DESERIALIZADORES por TipoRequerimiento · historial y comentarios embebidos", "shape": "rect", "subgraph": "sg_infraestructura", "x": 2840, "y": 330, "meta": {}, "color": {"border": "#ec4899", "bg": "#831843", "text": "#f472b6"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#ec4899;\">\n                <div class=\"comp-header\" style=\"background:#831843;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">infra_repo_req</span>\n                        <span class=\"comp-name\">RepositorioRequerimientosMongo - _SERIALIZADORES / _DESERIALIZADORES por TipoRequerimiento · historial y comentarios embebidos</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_infraestructura</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "infra_repo_sup", "title": "RepositorioSupervisionMongo - delete_one por (supervisor_id, supervisado_id)", "raw_label": "RepositorioSupervisionMongo<br/>delete_one por (supervisor_id, supervisado_id)", "shape": "rect", "subgraph": "sg_infraestructura", "x": 2840, "y": 460, "meta": {}, "color": {"border": "#ec4899", "bg": "#831843", "text": "#f472b6"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#ec4899;\">\n                <div class=\"comp-header\" style=\"background:#831843;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">infra_repo_sup</span>\n                        <span class=\"comp-name\">RepositorioSupervisionMongo - delete_one por (supervisor_id, supervisado_id)</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_infraestructura</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "infra_repo_notif", "title": "RepositorioNotificacionesMongo - find por supervisor_id", "raw_label": "RepositorioNotificacionesMongo<br/>find por supervisor_id", "shape": "rect", "subgraph": "sg_infraestructura", "x": 2840, "y": 590, "meta": {}, "color": {"border": "#ec4899", "bg": "#831843", "text": "#f472b6"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#ec4899;\">\n                <div class=\"comp-header\" style=\"background:#831843;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">infra_repo_notif</span>\n                        <span class=\"comp-name\">RepositorioNotificacionesMongo - find por supervisor_id</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_infraestructura</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "db_col_usuarios", "title": "usuarios - indice unico: email", "raw_label": "usuarios<br/>indice unico: email", "shape": "cylinder", "subgraph": "sg_persistencia", "x": 3300, "y": 70, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">db_col_usuarios</span>\n                        <span class=\"comp-name\">usuarios - indice unico: email</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_persistencia</span>\n                    <span class=\"comp-tag\">cylinder</span>\n                </div>\n            </div>\n            "}, {"id": "db_col_req", "title": "requerimientos - indices: solicitante_id, estado, tipo · historial y comentarios embebidos", "raw_label": "requerimientos<br/>indices: solicitante_id, estado, tipo · historial y comentarios embebidos", "shape": "cylinder", "subgraph": "sg_persistencia", "x": 3300, "y": 200, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">db_col_req</span>\n                        <span class=\"comp-name\">requerimientos - indices: solicitante_id, estado, tipo · historial y comentarios embebidos</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_persistencia</span>\n                    <span class=\"comp-tag\">cylinder</span>\n                </div>\n            </div>\n            "}, {"id": "db_col_sup", "title": "supervisiones - indices: supervisor_id, supervisado_id", "raw_label": "supervisiones<br/>indices: supervisor_id, supervisado_id", "shape": "cylinder", "subgraph": "sg_persistencia", "x": 3300, "y": 330, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">db_col_sup</span>\n                        <span class=\"comp-name\">supervisiones - indices: supervisor_id, supervisado_id</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_persistencia</span>\n                    <span class=\"comp-tag\">cylinder</span>\n                </div>\n            </div>\n            "}, {"id": "db_col_notif", "title": "notificaciones - indice: supervisor_id", "raw_label": "notificaciones<br/>indice: supervisor_id", "shape": "cylinder", "subgraph": "sg_persistencia", "x": 3300, "y": 460, "meta": {}, "color": {"border": "#38bdf8", "bg": "#0c4a6e", "text": "#38bdf8"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#38bdf8;\">\n                <div class=\"comp-header\" style=\"background:#0c4a6e;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">db_col_notif</span>\n                        <span class=\"comp-name\">notificaciones - indice: supervisor_id</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_persistencia</span>\n                    <span class=\"comp-tag\">cylinder</span>\n                </div>\n            </div>\n            "}, {"id": "test_fakes", "title": "tests/fakes.py - FakeRepositorio{Usuarios,Requerimientos,Supervision,Notificaciones} en memoria", "raw_label": "tests/fakes.py<br/>FakeRepositorio{Usuarios,Requerimientos,Supervision,Notificaciones} en memoria", "shape": "rect", "subgraph": "sg_tests", "x": 3760, "y": 70, "meta": {}, "color": {"border": "#3b82f6", "bg": "#1e3a8a", "text": "#60a5fa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#3b82f6;\">\n                <div class=\"comp-header\" style=\"background:#1e3a8a;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">test_fakes</span>\n                        <span class=\"comp-name\">tests/fakes.py - FakeRepositorio{Usuarios,Requerimientos,Supervision,Notificaciones} en memoria</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_tests</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "test_lifespan", "title": "tests/lifespan.py + dependency_overrides - mongomock · sin Mongo real", "raw_label": "tests/lifespan.py + dependency_overrides<br/>mongomock · sin Mongo real", "shape": "rect", "subgraph": "sg_tests", "x": 3760, "y": 200, "meta": {}, "color": {"border": "#3b82f6", "bg": "#1e3a8a", "text": "#60a5fa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#3b82f6;\">\n                <div class=\"comp-header\" style=\"background:#1e3a8a;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">test_lifespan</span>\n                        <span class=\"comp-name\">tests/lifespan.py + dependency_overrides - mongomock · sin Mongo real</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">sg_tests</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "obtener_servicio_usuarios", "title": "repo, verificar_password", "raw_label": "repo, verificar_password", "shape": "round", "subgraph": "General", "x": 4220, "y": 70, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">obtener_servicio_usuarios</span>\n                        <span class=\"comp-name\">repo, verificar_password</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">General</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "obtener_servicio_requerimientos", "title": "repo, despachador", "raw_label": "repo, despachador", "shape": "round", "subgraph": "General", "x": 4220, "y": 200, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">obtener_servicio_requerimientos</span>\n                        <span class=\"comp-name\">repo, despachador</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">General</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "obtener_servicio_supervision", "title": "repo, repo_usuarios", "raw_label": "repo, repo_usuarios", "shape": "round", "subgraph": "General", "x": 4220, "y": 330, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">obtener_servicio_supervision</span>\n                        <span class=\"comp-name\">repo, repo_usuarios</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">General</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "obtener_servicio_notificaciones", "title": "repo", "raw_label": "repo", "shape": "round", "subgraph": "General", "x": 4220, "y": 460, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">obtener_servicio_notificaciones</span>\n                        <span class=\"comp-name\">repo</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">General</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "FabricaRequerimientos.crear", "title": "tipo, **atributos", "raw_label": "tipo, **atributos", "shape": "round", "subgraph": "General", "x": 4220, "y": 590, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">FabricaRequerimientos.crear</span>\n                        <span class=\"comp-name\">tipo, **atributos</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">General</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "despachador.notificar", "title": "evento", "raw_label": "evento", "shape": "round", "subgraph": "General", "x": 4220, "y": 720, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">despachador.notificar</span>\n                        <span class=\"comp-name\">evento</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">General</span>\n                    <span class=\"comp-tag\">round</span>\n                </div>\n            </div>\n            "}, {"id": "pres_errores", "title": "pres_errores", "raw_label": "pres_errores", "shape": "rect", "subgraph": "General", "x": 4220, "y": 850, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">pres_errores</span>\n                        <span class=\"comp-name\">pres_errores</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">General</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "comp_gate_identidad", "title": "comp_gate_identidad", "raw_label": "comp_gate_identidad", "shape": "rect", "subgraph": "General", "x": 4220, "y": 980, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">comp_gate_identidad</span>\n                        <span class=\"comp-name\">comp_gate_identidad</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">General</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}, {"id": "comp_gate_rol", "title": "comp_gate_rol", "raw_label": "comp_gate_rol", "shape": "rect", "subgraph": "General", "x": 4220, "y": 1110, "meta": {}, "color": {"border": "#8b5cf6", "bg": "#4c1d95", "text": "#a78bfa"}, "html": "\n            <div class=\"comp-card\" style=\"border-color:#8b5cf6;\">\n                <div class=\"comp-header\" style=\"background:#4c1d95;\">\n                    <span class=\"comp-icon\">📦</span>\n                    <div class=\"comp-title-group\">\n                        <span class=\"comp-id\">comp_gate_rol</span>\n                        <span class=\"comp-name\">comp_gate_rol</span>\n                    </div>\n                </div>\n                <div class=\"comp-body\">\n                    <span class=\"comp-sub\">General</span>\n                    <span class=\"comp-tag\">rect</span>\n                </div>\n            </div>\n            "}];
+const connectionsData = [{"from": "pres_main", "to": "pres_router_usr", "type": "arrow", "label": ""}, {"from": "pres_main", "to": "pres_router_req", "type": "arrow", "label": ""}, {"from": "pres_main", "to": "pres_router_sup", "type": "arrow", "label": ""}, {"from": "pres_main", "to": "pres_router_notif", "type": "arrow", "label": ""}, {"from": "pres_main", "to": "pres_errores", "type": "arrow", "label": ""}, {"from": "comp_config", "to": "comp_auth", "type": "arrow", "label": ""}, {"from": "comp_deps", "to": "comp_auth", "type": "arrow", "label": ""}, {"from": "comp_deps", "to": "comp_gate_identidad", "type": "arrow", "label": ""}, {"from": "comp_deps", "to": "comp_gate_rol", "type": "arrow", "label": ""}, {"from": "pres_router_usr", "to": "pres_schemas_usr", "type": "arrow", "label": ""}, {"from": "pres_router_req", "to": "pres_schemas_req", "type": "arrow", "label": ""}, {"from": "pres_router_sup", "to": "pres_schemas_sup", "type": "arrow", "label": ""}, {"from": "pres_router_notif", "to": "pres_schemas_notif", "type": "arrow", "label": ""}, {"from": "pres_router_usr", "to": "comp_deps", "type": "arrow", "label": ""}, {"from": "pres_router_req", "to": "comp_deps", "type": "arrow", "label": ""}, {"from": "pres_router_sup", "to": "comp_deps", "type": "arrow", "label": ""}, {"from": "pres_router_notif", "to": "comp_deps", "type": "arrow", "label": ""}, {"from": "comp_deps", "to": "app_srv_usr", "type": "thick", "label": "obtener_servicio_usuarios(repo, verificar_password)"}, {"from": "comp_deps", "to": "app_srv_req", "type": "thick", "label": "obtener_servicio_requerimientos(repo, despachador)"}, {"from": "comp_deps", "to": "app_srv_sup", "type": "thick", "label": "obtener_servicio_supervision(repo, repo_usuarios)"}, {"from": "comp_deps", "to": "app_srv_notif", "type": "thick", "label": "obtener_servicio_notificaciones(repo)"}, {"from": "comp_deps", "to": "obs_despachador", "type": "thick", "label": "obtener_despachador_eventos: NUEVO por request"}, {"from": "pres_router_sup", "to": "comp_gate_rol", "type": "arrow", "label": "|\"router-level"}, {"from": "pres_router_notif", "to": "comp_gate_rol", "type": "arrow", "label": "|\"router-level"}, {"from": "pres_router_usr", "to": "comp_gate_rol", "type": "arrow", "label": "|\"POST/GET /usuarios, PATCH x3, /tecnicos"}, {"from": "pres_router_req", "to": "dom_requerimiento", "type": "dashed", "label": "NO usa requerir_rol: valida la entidad"}, {"from": "comp_gate_identidad", "to": "app_srv_usr", "type": "arrow", "label": ""}, {"from": "app_srv_req", "to": "dom_fabrica", "type": "thick", "label": "FabricaRequerimientos.crear(tipo, **atributos)"}, {"from": "dom_fabrica", "to": "dom_incidente", "type": "arrow", "label": ""}, {"from": "dom_fabrica", "to": "dom_solicitud", "type": "arrow", "label": ""}, {"from": "app_srv_req", "to": "dom_requerimiento", "type": "thick", "label": "_aplicar_transicion: delega la regla"}, {"from": "app_srv_usr", "to": "dom_usuario", "type": "arrow", "label": ""}, {"from": "app_srv_sup", "to": "dom_relacion_sup", "type": "arrow", "label": ""}, {"from": "app_srv_notif", "to": "dom_notificacion", "type": "arrow", "label": ""}, {"from": "dom_incidente", "to": "dom_requerimiento", "type": "arrow", "label": "|\"hereda"}, {"from": "dom_solicitud", "to": "dom_requerimiento", "type": "arrow", "label": "|\"hereda"}, {"from": "dom_requerimiento", "to": "dom_estados", "type": "arrow", "label": ""}, {"from": "dom_requerimiento", "to": "dom_comentario", "type": "arrow", "label": ""}, {"from": "dom_requerimiento", "to": "dom_eventos", "type": "thick", "label": "_registrar_evento"}, {"from": "dom_requerimiento", "to": "dom_compartido", "type": "arrow", "label": ""}, {"from": "dom_usuario", "to": "dom_compartido", "type": "arrow", "label": ""}, {"from": "dom_exc_req", "to": "dom_error_base", "type": "arrow", "label": ""}, {"from": "dom_exc_usr", "to": "dom_error_base", "type": "arrow", "label": ""}, {"from": "dom_exc_sup", "to": "dom_error_base", "type": "arrow", "label": ""}, {"from": "dom_exc_notif", "to": "dom_error_base", "type": "arrow", "label": ""}, {"from": "dom_requerimiento", "to": "dom_exc_req", "type": "arrow", "label": "|\"raise"}, {"from": "dom_usuario", "to": "dom_exc_usr", "type": "arrow", "label": "|\"raise"}, {"from": "dom_error_base", "to": "pres_errores", "type": "thick", "label": "sube sin try/except en el router"}, {"from": "pres_errores", "to": "pres_main", "type": "arrow", "label": "|\"JSONResponse(status_code, detail)"}, {"from": "app_srv_usr", "to": "port_repo_usr", "type": "arrow", "label": "|\"depende de la abstraccion"}, {"from": "app_srv_req", "to": "port_repo_req", "type": "arrow", "label": "|\"depende de la abstraccion"}, {"from": "app_srv_sup", "to": "port_repo_sup", "type": "arrow", "label": ""}, {"from": "app_srv_sup", "to": "port_repo_usr", "type": "arrow", "label": ""}, {"from": "app_srv_notif", "to": "port_repo_notif", "type": "arrow", "label": ""}, {"from": "app_srv_req", "to": "obs_despachador", "type": "thick", "label": "despachador.notificar(evento)"}, {"from": "obs_despachador", "to": "port_observador", "type": "arrow", "label": "|\"for observador in suscriptos"}, {"from": "obs_logger", "to": "port_observador", "type": "dashed", "label": "implementa"}, {"from": "obs_mongo", "to": "port_observador", "type": "dashed", "label": "implementa"}, {"from": "obs_mongo", "to": "port_repo_usr", "type": "arrow", "label": ""}, {"from": "obs_mongo", "to": "port_repo_sup", "type": "arrow", "label": ""}, {"from": "obs_mongo", "to": "port_repo_notif", "type": "arrow", "label": ""}, {"from": "obs_mongo", "to": "dom_notificacion", "type": "thick", "label": "crea Notificacion por cada supervisor"}, {"from": "port_observador", "to": "dom_eventos", "type": "dashed", "label": "solo conoce EventoRequerimiento"}, {"from": "infra_repo_usr", "to": "port_repo_usr", "type": "dashed", "label": "implementa"}, {"from": "infra_repo_req", "to": "port_repo_req", "type": "dashed", "label": "implementa"}, {"from": "infra_repo_sup", "to": "port_repo_sup", "type": "dashed", "label": "implementa"}, {"from": "infra_repo_notif", "to": "port_repo_notif", "type": "dashed", "label": "implementa"}, {"from": "infra_repo_req", "to": "dom_fabrica", "type": "arrow", "label": "|\"FabricaRequerimientos.reconstruir / Incidente.reconstruir"}, {"from": "infra_repo_usr", "to": "infra_db", "type": "arrow", "label": ""}, {"from": "infra_repo_req", "to": "infra_db", "type": "arrow", "label": ""}, {"from": "infra_repo_sup", "to": "infra_db", "type": "arrow", "label": ""}, {"from": "infra_repo_notif", "to": "infra_db", "type": "arrow", "label": ""}, {"from": "infra_repo_usr", "to": "db_col_usuarios", "type": "thick", "label": ""}, {"from": "infra_repo_req", "to": "db_col_req", "type": "thick", "label": ""}, {"from": "infra_repo_sup", "to": "db_col_sup", "type": "thick", "label": ""}, {"from": "infra_repo_notif", "to": "db_col_notif", "type": "thick", "label": ""}, {"from": "comp_deps", "to": "infra_repo_usr", "type": "arrow", "label": "|\"construye los adaptadores por request"}, {"from": "comp_deps", "to": "infra_repo_req", "type": "arrow", "label": ""}, {"from": "comp_deps", "to": "infra_repo_sup", "type": "arrow", "label": ""}, {"from": "comp_deps", "to": "infra_repo_notif", "type": "arrow", "label": ""}, {"from": "test_fakes", "to": "port_repo_usr", "type": "dashed", "label": "implementa los 4 puertos"}, {"from": "test_fakes", "to": "port_repo_req", "type": "dashed", "label": ""}, {"from": "test_fakes", "to": "port_repo_sup", "type": "dashed", "label": ""}, {"from": "test_fakes", "to": "port_repo_notif", "type": "dashed", "label": ""}, {"from": "test_lifespan", "to": "pres_main", "type": "dashed", "label": ""}];
+const subgraphsData = [{"id": "sg_presentacion", "title": "CAPA DE PRESENTACION (Routers + DTOs Pydantic)", "x": 60, "y": 40, "width": 320, "height": 1210}, {"id": "sg_composicion", "title": "COMPOSICION / CROSS-CUTTING", "x": 520, "y": 40, "width": 320, "height": 560}, {"id": "sg_aplicacion", "title": "SERVICIOS DE APLICACION (casos de uso)", "x": 980, "y": 40, "width": 320, "height": 560}, {"id": "sg_dominio", "title": "DOMINIO (modelo rico, sin dependencias hacia afuera)", "x": 1440, "y": 40, "width": 320, "height": 2120}, {"id": "sg_puertos", "title": "PUERTOS (ABC) — frontera de Dependency Inversion", "x": 1900, "y": 40, "width": 320, "height": 690}, {"id": "sg_observer", "title": "PATRON OBSERVER (eventos de dominio)", "x": 2360, "y": 40, "width": 320, "height": 430}, {"id": "sg_infraestructura", "title": "ADAPTADORES PyMongo", "x": 2820, "y": 40, "width": 320, "height": 690}, {"id": "sg_persistencia", "title": "MONGODB (colecciones reutilizadas del sub-plan 1)", "x": 3280, "y": 40, "width": 320, "height": 560}, {"id": "sg_tests", "title": "DOBLES DE PRUEBA (evidencia del desacople)", "x": 3740, "y": 40, "width": 320, "height": 300}, {"id": "General", "title": "Otros Componentes", "x": 4200, "y": 40, "width": 320, "height": 1220}];
+
+const world = document.getElementById('world');
+const svgEl = document.getElementById('connections');
+const canvas = document.getElementById('canvas');
+const modalOverlay = document.getElementById('modalOverlay');
+const modalBody = document.getElementById('modalBody');
+const modalTitle = document.getElementById('modalTitle');
+const searchBox = document.getElementById('searchBox');
+const minimapViewport = document.getElementById('minimapViewport');
+const filterGroup = document.getElementById('filterGroup');
+
+const domNodes = {};
+const initialPositions = {};
+
+// Renderizar zonas de subgrafos
+subgraphsData.forEach((s, idx) => {
+  const z = document.createElement('div');
+  z.className = 'subgraph-zone';
+  z.style.left = `${s.x}px`;
+  z.style.top = `${s.y}px`;
+  z.style.width = `${s.width}px`;
+  z.style.height = `${s.height}px`;
+  z.style.borderColor = '#334155';
+  z.style.background = 'rgba(255,255,255,0.015)';
+
+  const lbl = document.createElement('span');
+  lbl.className = 'subgraph-label';
+  lbl.textContent = s.title;
+  lbl.style.color = '#38bdf8';
+  lbl.style.borderColor = '#334155';
+  z.appendChild(lbl);
+  world.appendChild(z);
+
+  // Crear boton de filtro
+  const btn = document.createElement('button');
+  btn.className = 'btn';
+  btn.setAttribute('data-sub', s.id);
+  btn.textContent = s.title;
+  filterGroup.appendChild(btn);
+});
+
+// Renderizar Nodos
+nodesData.forEach(n => {
+  const el = document.createElement('div');
+  el.id = n.id;
+  el.className = 'node';
+  el.style.left = `${n.x}px`;
+  el.style.top = `${n.y}px`;
+  el.innerHTML = n.html;
+  initialPositions[n.id] = { x: n.x, y: n.y };
+
+  el.addEventListener('click', () => {
+    if (!el.dataset.wasDragged) openModal(n);
+    delete el.dataset.wasDragged;
+  });
+
+  world.appendChild(el);
+  domNodes[n.id] = el;
+});
+
+// Matematica perimetrica
+function getNodeEdgeRect(fromCenter, toCenter, el) {
+  const w = el.offsetWidth / 2;
+  const h = el.offsetHeight / 2;
+  const cx = parseInt(el.style.left) + w;
+  const cy = parseInt(el.style.top) + h;
+  const angle = Math.atan2(toCenter.y - fromCenter.y, toCenter.x - fromCenter.x);
+  const absCos = Math.abs(Math.cos(angle)), absSin = Math.abs(Math.sin(angle));
+  const dist = (absCos * h > absSin * w) ? (w / absCos) : (h / absSin);
+  return { x: cx + Math.cos(angle) * dist, y: cy + Math.sin(angle) * dist };
+}
+
+function getCenter(el) {
+  return { x: parseInt(el.style.left) + el.offsetWidth / 2, y: parseInt(el.style.top) + el.offsetHeight / 2 };
+}
+
+function drawConnections() {
+  const defs = svgEl.querySelector('defs');
+  svgEl.innerHTML = '';
+  svgEl.appendChild(defs);
+
+  connectionsData.forEach(c => {
+    const fromEl = domNodes[c.from];
+    const toEl = domNodes[c.to];
+    if (!fromEl || !toEl) return;
+    if (fromEl.style.display === 'none' || toEl.style.display === 'none') return;
+
+    const start = getNodeEdgeRect(getCenter(fromEl), getCenter(toEl), fromEl);
+    const end = getNodeEdgeRect(getCenter(toEl), getCenter(fromEl), toEl);
+
+    const dx = Math.abs(end.x - start.x);
+    const curvature = Math.min(Math.max(dx * 0.45, 40), 160);
+    const cp1x = start.x + (end.x > start.x ? curvature : -curvature);
+    const cp2x = end.x - (end.x > start.x ? curvature : -curvature);
+
+    const d = `M ${start.x} ${start.y} C ${cp1x} ${start.y}, ${cp2x} ${end.y}, ${end.x} ${end.y}`;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    let marker = 'arrow';
+    if (c.type === 'dashed') marker = 'arrow-dashed';
+    if (c.type === 'thick') marker = 'arrow-thick';
+    path.setAttribute('class', `conn-path ${c.type}`);
+    path.setAttribute('marker-end', `url(#${marker})`);
+    svgEl.appendChild(path);
+
+    if (c.label) {
+      const midX = 0.125 * start.x + 0.375 * cp1x + 0.375 * cp2x + 0.125 * end.x;
+      const midY = 0.125 * start.y + 0.375 * start.y + 0.375 * end.y + 0.125 * end.y;
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', midX); text.setAttribute('y', midY);
+      text.setAttribute('class', 'conn-label-text');
+      text.textContent = c.label;
+
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      const w = c.label.length * 6.5 + 10;
+      rect.setAttribute('x', midX - w/2); rect.setAttribute('y', midY - 9);
+      rect.setAttribute('width', w); rect.setAttribute('height', 18);
+      rect.setAttribute('class', 'conn-label-bg');
+      g.appendChild(rect); g.appendChild(text);
+      svgEl.appendChild(g);
+    }
+  });
+  updateMinimap();
+}
+
+// Drag & Drop
+let dragTarget = null, offX = 0, offY = 0;
+world.addEventListener('mousedown', e => {
+  const el = e.target.closest('.node');
+  if (!el) return;
+  dragTarget = el;
+  offX = e.clientX - el.getBoundingClientRect().left;
+  offY = e.clientY - el.getBoundingClientRect().top;
+  el.style.zIndex = 100;
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', e => {
+  if (!dragTarget) return;
+  dragTarget.dataset.wasDragged = '1';
+  const worldRect = world.getBoundingClientRect();
+  dragTarget.style.left = `${Math.max(10, e.clientX - worldRect.left - offX + canvas.scrollLeft)}px`;
+  dragTarget.style.top = `${Math.max(10, e.clientY - worldRect.top - offY + canvas.scrollTop)}px`;
+  drawConnections();
+});
+
+document.addEventListener('mouseup', () => { if (dragTarget) { dragTarget.style.zIndex = 10; dragTarget = null; } });
+
+// Paneo
+let isPanning = false, panX = 0, panY = 0;
+canvas.addEventListener('mousedown', e => {
+  if (e.target.closest('.node') || e.target.closest('#modalCard')) return;
+  isPanning = true; panX = e.clientX + canvas.scrollLeft; panY = e.clientY + canvas.scrollTop;
+  canvas.classList.add('grabbing');
+});
+document.addEventListener('mousemove', e => {
+  if (!isPanning) return;
+  canvas.scrollLeft = panX - e.clientX; canvas.scrollTop = panY - e.clientY;
+  updateMinimap();
+});
+document.addEventListener('mouseup', () => { isPanning = false; canvas.classList.remove('grabbing'); });
+
+// Filtros
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.filter-group .btn');
+  if (!btn) return;
+  document.querySelectorAll('.filter-group .btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const sub = btn.getAttribute('data-sub');
+  nodesData.forEach(n => {
+    const el = domNodes[n.id];
+    el.style.display = (sub === 'all' || n.subgraph === sub) ? 'block' : 'none';
+  });
+  drawConnections();
+});
+
+// Busqueda
+searchBox.addEventListener('input', e => {
+  const t = e.target.value.toLowerCase().trim();
+  nodesData.forEach(n => {
+    const el = domNodes[n.id];
+    const match = !t || n.id.toLowerCase().includes(t) || n.title.toLowerCase().includes(t);
+    el.classList.toggle('highlight', !!t && match);
+    el.classList.toggle('dimmed', !!t && !match);
+  });
+});
+
+// Reset
+document.getElementById('resetBtn').addEventListener('click', () => {
+  nodesData.forEach(n => {
+    const el = domNodes[n.id];
+    el.style.left = `${initialPositions[n.id].x}px`;
+    el.style.top = `${initialPositions[n.id].y}px`;
+    el.classList.remove('highlight', 'dimmed');
+  });
+  searchBox.value = '';
+  document.querySelector('.filter-group .btn[data-sub="all"]').click();
+  canvas.scrollLeft = 0; canvas.scrollTop = 0;
+  drawConnections();
+});
+
+function updateMinimap() {
+  const scaleX = 220 / 4500, scaleY = 110 / 2500;
+  minimapViewport.style.width = `${Math.min(canvas.clientWidth * scaleX, 220)}px`;
+  minimapViewport.style.height = `${Math.min(canvas.clientHeight * scaleY, 110)}px`;
+  minimapViewport.style.left = `${canvas.scrollLeft * scaleX}px`;
+  minimapViewport.style.top = `${canvas.scrollTop * scaleY}px`;
+}
+
+function openModal(n) {
+  modalTitle.textContent = `${n.title} (${n.id})`;
+  const inc = connectionsData.filter(c => c.to === n.id);
+  const out = connectionsData.filter(c => c.from === n.id);
+
+  modalBody.innerHTML = `
+    <div class="modal-sec">
+      <div class="modal-sec-title">📍 Subgrafo / Capa</div>
+      <p style="font-size:13px;color:#f8fafc;">${n.subgraph}</p>
+    </div>
+    ${n.meta && n.meta.desc ? `
+    <div class="modal-sec">
+      <div class="modal-sec-title">📝 Descripción</div>
+      <p style="font-size:13px;color:#cbd5e1;line-height:1.5;">${n.meta.desc}</p>
+    </div>` : ''}
+    ${n.meta && n.meta.archivo ? `
+    <div class="modal-sec">
+      <div class="modal-sec-title">📁 Archivo / Paquete</div>
+      <code style="font-size:12px;background:#0b1120;padding:4px 8px;border-radius:4px;color:#38bdf8;">${n.meta.archivo}</code>
+    </div>` : ''}
+    <div class="modal-sec">
+      <div class="modal-sec-title">🔗 Conexiones Entrantes</div>
+      <ul class="modal-list">${inc.length ? inc.map(c => `<li><strong>${c.from}</strong> ➔ ${c.label || 'invoca'}</li>`).join('') : '<li style="color:#64748b">Ninguna</li>'}</ul>
+    </div>
+    <div class="modal-sec">
+      <div class="modal-sec-title">➡️ Conexiones Salientes</div>
+      <ul class="modal-list">${out.length ? out.map(c => `<li>➔ <strong>${c.to}</strong> (${c.label || 'invoca'})</li>`).join('') : '<li style="color:#64748b">Ninguna</li>'}</ul>
+    </div>
+  `;
+  modalOverlay.classList.add('show');
+}
+
+function closeModal() { modalOverlay.classList.remove('show'); }
+
+window.addEventListener('DOMContentLoaded', () => {
+  drawConnections();
+});
+window.addEventListener('resize', drawConnections);
+</script>
+</body>
+</html>

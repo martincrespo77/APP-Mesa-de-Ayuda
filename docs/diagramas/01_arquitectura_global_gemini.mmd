@@ -1,0 +1,161 @@
+graph TD
+    subgraph sg_clientes["CLIENTES"]
+        direction TB
+        subgraph sg_web["Portal Web (web/) — Vanilla JS, sin build step"]
+            cli_web_index["web/index.html<br/>Login + auto-registro de Solicitante"]
+            cli_web_app["web/app.html<br/>Portal SPA-lite: 5 pestañas por rol"]
+            cli_web_apijs["web/js/api.js<br/>apiFetch / apiFetchJson · JWT en localStorage · corte de sesion en 401"]
+            cli_web_loginjs["web/js/login.js<br/>POST /usuarios/login (form-urlencoded) + POST /usuarios/registro"]
+            cli_web_appjs["web/js/app.js<br/>Render por rol · funciones puede*(ticket) · sin framework ni build"]
+            cli_web_css["web/css/estilos.css<br/>CSS vanilla responsivo"]
+        end
+        subgraph sg_desk["Cliente Escritorio (desktop/) — PyQt6 desacoplado"]
+            cli_desktop_main["desktop/main.py<br/>QApplication · flags --demo y --url"]
+            cli_desktop_login["desktop/views/login_window.py<br/>LoginWindow · signal sesion_iniciada"]
+            cli_desktop_mainwin["desktop/views/main_window.py<br/>MainWindow (QTabWidget): Requerimientos / Nuevo / Notificaciones"]
+            cli_desktop_puerto["desktop/api_client.py::ClienteApi (ABC)<br/>Puerto abstracto del cliente"]
+            cli_desktop_http["desktop/api_client.py::ApiClienteHttp<br/>httpx.Client · Bearer JWT · timeout 10s"]
+            cli_desktop_demo["desktop/api_client.py::ApiClienteDemo<br/>Modo Demostracion offline · sin red"]
+            cli_desktop_dtos[/"desktop/models.py<br/>UsuarioDTO · RequerimientoDTO · EventoDTO + enums propios"/]
+        end
+        cli_navegador(["Navegador de escritorio / Celular<br/>(Chrome, Safari, Firefox)"])
+        cli_bruno["bruno/ · 4 carpetas · 39 requests .bru + environments/local.bru<br/>base_url=http://localhost:8000"]
+    end
+    subgraph sg_red["RED Y PERIMETRO DE SEGURIDAD"]
+        red_tailscale{{"Red Tailscale (WireGuard)<br/>Celular autorizado: 100.109.79.72"}}
+        red_firewall{{"scripts/firewall_tailscale.sh<br/>iptables · apply / clear / status"}}
+        red_chain_docker{{"Cadena DOCKER-USER<br/>ACCEPT conntrack · ACCEPT 100.109.79.72:8000 · ACCEPT 127.0.0.1:8000 · DROP resto"}}
+        red_chain_input{{"Cadena INPUT<br/>mismas 4 reglas APP_MESA_* sobre docker-proxy"}}
+        red_loopback{{"127.0.0.1 (host local)<br/>Desarrollo, Bruno, seed y desktop"}}
+        red_puerto_8000{{"Puerto publicado 8000/tcp<br/>unico punto de entrada de la aplicacion"}}
+    end
+    subgraph sg_docker["DOCKER COMPOSE"]
+        dock_compose["docker-compose.yml<br/>servicios: mongo, api · volumen mongo_data"]
+        dock_dockerfile["Dockerfile (multi-stage)<br/>build: python:3.12-slim + uv 0.8.21 (uv sync --frozen --no-dev)"]
+        dock_runtime["Etapa runtime<br/>usuario no-root appuser (uid 1001) · EXPOSE 8000"]
+        dock_entrypoint("ENTRYPOINT uvicorn app.main:app --host 0.0.0.0 --port 8000")
+        dock_svc_api["Servicio api<br/>ports 8000:8000 · restart unless-stopped · depends_on mongo (service_healthy)"]
+        dock_svc_mongo["Servicio mongo (mongo:7)<br/>ports 127.0.0.1:27017 · healthcheck db.adminCommand('ping') cada 5s"]
+        dock_volumen[("Volumen mongo_data<br/>/data/db persistente")]
+        dock_env[/"Variables de entorno<br/>MONGODB_URL · MONGODB_DB_NAME=mesa_de_ayuda · SECRET_KEY"/]
+    end
+    subgraph sg_api["BACKEND FastAPI (contenedor api)"]
+        api_app("app/main.py<br/>FastAPI(title='Mesa de Ayuda - Cooperativa Comunicarlos')")
+        api_lifespan("lifespan(app)<br/>crear_cliente_mongo -> obtener_base_datos -> crear_indices -> app.state.db")
+        api_health[["GET /health<br/>verificar_salud() -> {'status':'ok'}"]]
+        api_handler_err{"exception_handler(DominioError)<br/>errores.codigo_http_para -> 401/403/404/409/400"}
+        api_router_usuarios[["router_usuarios · prefix /usuarios<br/>login · registro · me · tecnicos · CRUD (9 endpoints)"]]
+        api_router_req[["router_requerimientos · prefix /requerimientos<br/>alta · listado · detalle · 8 transiciones (11 endpoints)"]]
+        api_router_sup[["router_supervision · prefix /supervisiones<br/>3 endpoints · router gateado a SUPERVISOR"]]
+        api_router_notif[["router_notificaciones · prefix /notificaciones<br/>2 endpoints · router gateado a SUPERVISOR"]]
+        api_static["app.mount('/', StaticFiles(directory='web', html=True))<br/>montado ULTIMO: los routers resuelven primero"]
+        api_config[/"app/config.py::Settings<br/>SECRET_KEY · MONGODB_URL · MONGODB_DB_NAME · HS256 · 60 min"/]
+        api_auth["app/auth.py<br/>bcrypt hashpw/checkpw · jose jwt encode/decode · claims sub, rol, exp"]
+        api_deps["app/deps.py<br/>OAuth2PasswordBearer(tokenUrl='/usuarios/login') · obtener_usuario_actual · requerir_rol"]
+    end
+    subgraph sg_datos["MONGODB 7 (contenedor mongo)"]
+        db_cliente["PyMongo MongoClient(tz_aware=True)<br/>pool unico creado en el lifespan"]
+        db_base[("Base de datos mesa_de_ayuda")]
+        db_col_usuarios[("usuarios<br/>indice unico: email")]
+        db_col_req[("requerimientos<br/>indices: solicitante_id, estado, tipo · historial y comentarios embebidos")]
+        db_col_sup[("supervisiones<br/>indices: supervisor_id, supervisado_id")]
+        db_col_notif[("notificaciones<br/>indice: supervisor_id")]
+    end
+    subgraph sg_operacion["OPERACION"]
+        ops_seed("scripts/seed_mongo.py<br/>docker compose exec api python -m scripts.seed_mongo · UUID5 deterministas")
+        ops_tests["tests/ (231 tests pytest)<br/>fakes.py en memoria + mongomock"]
+    end
+
+    %% --- Clientes hacia el borde de red ---
+    cli_navegador ==>|"HTTPS/HTTP sobre Tailscale"| red_tailscale
+    cli_navegador -->|"http://localhost:8000"| red_loopback
+    cli_desktop_main --> cli_desktop_login
+    cli_desktop_login -->|"signal sesion_iniciada(cliente, usuario)"| cli_desktop_mainwin
+    cli_desktop_login --> cli_desktop_puerto
+    cli_desktop_mainwin --> cli_desktop_puerto
+    cli_desktop_http -.->|"implementa"| cli_desktop_puerto
+    cli_desktop_demo -.->|"implementa (sin red)"| cli_desktop_puerto
+    cli_desktop_http --> cli_desktop_dtos
+    cli_desktop_http ==>|"httpx · Bearer JWT"| red_loopback
+    cli_bruno -->|"HTTP · vars de local.bru"| red_loopback
+
+    %% --- Portal web: archivos estaticos servidos por la propia API ---
+    cli_navegador --> cli_web_index
+    cli_navegador --> cli_web_app
+    cli_web_index --> cli_web_loginjs
+    cli_web_app --> cli_web_appjs
+    cli_web_loginjs --> cli_web_apijs
+    cli_web_appjs --> cli_web_apijs
+    cli_web_app --> cli_web_css
+    cli_web_apijs ==>|"fetch mismo origen · sin CORS"| red_puerto_8000
+
+    %% --- Perimetro ---
+    red_tailscale --> red_chain_input
+    red_tailscale --> red_chain_docker
+    red_loopback --> red_chain_input
+    red_firewall -->|"iptables -I ... APP_MESA_*"| red_chain_docker
+    red_firewall -->|"iptables -I ... APP_MESA_*"| red_chain_input
+    red_chain_docker -->|"ACCEPT 100.109.79.72 y 127.0.0.1 · DROP resto"| red_puerto_8000
+    red_chain_input -->|"ACCEPT 100.109.79.72 y 127.0.0.1 · DROP resto"| red_puerto_8000
+
+    %% --- Docker ---
+    red_puerto_8000 ==>|"publish 8000:8000"| dock_svc_api
+    dock_compose --> dock_svc_api
+    dock_compose --> dock_svc_mongo
+    dock_compose --> dock_volumen
+    dock_compose -->|"inyecta"| dock_env
+    dock_dockerfile --> dock_runtime
+    dock_runtime --> dock_entrypoint
+    dock_svc_api -->|"build: ."| dock_dockerfile
+    dock_svc_api -->|"depends_on: condition service_healthy"| dock_svc_mongo
+    dock_svc_mongo --> dock_volumen
+    dock_entrypoint ==> api_app
+    dock_env -.-> api_config
+
+    %% --- API interna (solo nivel de borde) ---
+    api_app --> api_lifespan
+    api_app --> api_health
+    api_app --> api_handler_err
+    api_app --> api_router_usuarios
+    api_app --> api_router_req
+    api_app --> api_router_sup
+    api_app --> api_router_notif
+    api_app -->|"mount ULTIMO en '/'"| api_static
+    api_static -.->|"sirve los archivos de web/"| cli_web_app
+    api_config --> api_auth
+    api_deps --> api_auth
+    api_router_usuarios -->|"crear_token_acceso / verificar_password"| api_auth
+    api_router_req --> api_deps
+    api_router_sup --> api_deps
+    api_router_notif --> api_deps
+    api_deps -.->|"lee request.app.state.db"| api_lifespan
+
+    %% --- Datos ---
+    api_lifespan ==>|"crear_cliente_mongo(settings)"| db_cliente
+    db_cliente -->|"mongodb://mongo:27017"| dock_svc_mongo
+    db_cliente --> db_base
+    db_base --> db_col_usuarios
+    db_base --> db_col_req
+    db_base --> db_col_sup
+    db_base --> db_col_notif
+    api_lifespan -.->|"crear_indices(db) idempotente"| db_base
+
+    %% --- Operacion ---
+    ops_seed ==>|"repositorios PyMongo directos, sin HTTP"| db_base
+    ops_tests -.->|"mongomock + dependency_overrides"| api_app
+
+    classDef capaCliente fill:#1e3a5f,stroke:#4a90d9,stroke-width:2px,color:#eaf2fb
+    classDef capaRed fill:#4a2d0a,stroke:#d99a4a,stroke-width:2px,color:#fdf3e6
+    classDef capaApi fill:#0f3d2e,stroke:#3fbf8f,stroke-width:2px,color:#e8fbf4
+    classDef capaAplicacion fill:#123a4d,stroke:#39a8d0,stroke-width:2px,color:#e7f7fd
+    classDef capaDominio fill:#3d2a5c,stroke:#a179e0,stroke-width:2px,color:#f3ecff
+    classDef capaInfra fill:#4a1f2b,stroke:#d9647f,stroke-width:2px,color:#fdeaef
+    classDef capaDatos fill:#2b2b2b,stroke:#9e9e9e,stroke-width:2px,color:#f0f0f0
+    classDef capaEventos fill:#553d0a,stroke:#e0b73f,stroke-width:2px,color:#fff8e1
+    
+    class cli_navegador,cli_web_index,cli_web_app,cli_web_apijs,cli_web_loginjs,cli_web_appjs,cli_web_css,cli_desktop_main,cli_desktop_login,cli_desktop_mainwin,cli_desktop_puerto,cli_desktop_http,cli_desktop_demo,cli_desktop_dtos,cli_bruno capaCliente
+    class red_tailscale,red_firewall,red_chain_docker,red_chain_input,red_loopback,red_puerto_8000 capaRed
+    class dock_compose,dock_dockerfile,dock_runtime,dock_entrypoint,dock_svc_api,dock_svc_mongo,dock_volumen,dock_env capaInfra
+    class api_app,api_lifespan,api_health,api_handler_err,api_router_usuarios,api_router_req,api_router_sup,api_router_notif,api_static,api_config,api_auth,api_deps capaApi
+    class db_cliente,db_base,db_col_usuarios,db_col_req,db_col_sup,db_col_notif capaDatos
+    class ops_seed,ops_tests capaAplicacion

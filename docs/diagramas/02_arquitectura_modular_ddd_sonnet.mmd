@@ -1,0 +1,211 @@
+graph TD
+    subgraph sg_presentacion["CAPA DE PRESENTACION (Routers + DTOs Pydantic)"]
+        direction TB
+        pres_main("app/main.py<br/>FastAPI · lifespan · include_router x4 · mount estatico")
+        pres_errores{"app/errores.py::codigo_http_para<br/>DominioError -> 401/403/404/409 (default 400 por MRO)"}
+        pres_router_usr[["usuarios/router.py<br/>login · registro · me · tecnicos · POST/GET · PATCH rol/activar/desactivar"]]
+        pres_router_req[["requerimientos/router.py<br/>crear · listar · obtener · iniciar-analisis · asignar-tecnico · iniciar-progreso · resolver · cerrar · cancelar · comentarios · derivar"]]
+        pres_router_sup[["supervision/router.py<br/>POST / DELETE /{supervisado_id} / GET · router-level requerir_rol(SUPERVISOR)"]]
+        pres_router_notif[["notificaciones/router.py<br/>GET · PATCH /{id}/leida · router-level requerir_rol(SUPERVISOR)"]]
+        pres_schemas_usr[/"usuarios/schemas.py<br/>UsuarioCreateRequest · RegistroSolicitanteRequest · CambiarRolRequest · UsuarioResponse · TecnicoResponse · TokenResponse"/]
+        pres_schemas_req[/"requerimientos/schemas.py<br/>Crear(Incidente|Solicitud)Request · Asignar/Resolver/Comentario/DerivarRequest · (Incidente|Solicitud)Response · Evento/ComentarioResponse · Discriminated Union por 'tipo'"/]
+        pres_schemas_sup[/"supervision/schemas.py<br/>AsignarSupervisionRequest · RelacionSupervisionResponse"/]
+        pres_schemas_notif[/"notificaciones/schemas.py<br/>NotificacionResponse"/]
+    end
+
+    subgraph sg_composicion["COMPOSICION / CROSS-CUTTING"]
+        direction TB
+        comp_deps["app/deps.py<br/>obtener_repositorio_* x4 · obtener_servicio_* x4 · obtener_despachador_eventos · obtener_usuario_actual · requerir_rol"]
+        comp_auth["app/auth.py<br/>bcrypt (obtener_password_hash / verificar_password) · JWT (crear_token_acceso / decodificar_token) · TokenInvalidoError"]
+        comp_config[/"app/config.py::Settings + get_settings() @lru_cache<br/>fail-fast si faltan SECRET_KEY / MONGODB_URL / MONGODB_DB_NAME"/]
+        comp_gate_rol{"requerir_rol(*roles)<br/>solo endpoints SIN contraparte de dominio -> HTTP 403"}
+        comp_gate_identidad{"obtener_usuario_actual<br/>decodifica JWT + RECARGA el Usuario del repo (baja logica inmediata) -> 401"}
+    end
+
+    subgraph sg_aplicacion["SERVICIOS DE APLICACION (casos de uso)"]
+        direction TB
+        app_srv_usr("ServicioUsuarios (usuarios/servicios.py)<br/>registrar · autenticar · obtener_por_id/email · listar_todos · listar_tecnicos_activos · activar · desactivar · cambiar_rol")
+        app_srv_req("ServicioRequerimientos (requerimientos/servicios.py)<br/>crear · obtener_visible_para · listar_visibles_para · iniciar_analisis · asignar_tecnico · iniciar_progreso · resolver · cerrar · cancelar · agregar_comentario · derivar_interconsulta · _aplicar_transicion")
+        app_srv_sup("ServicioSupervision (supervision/servicios.py)<br/>asignar (valida rol supervisable) · remover · listar_supervisados_de")
+        app_srv_notif("ServicioNotificaciones (notificaciones/servicios.py)<br/>listar_mias · marcar_leida (exige pertenencia)")
+    end
+
+    subgraph sg_dominio["DOMINIO (modelo rico, sin dependencias hacia afuera)"]
+        direction TB
+        dom_compartido["compartido/dominio.py<br/>RolUsuario · ServicioComunicarlos (Shared Kernel)"]
+        dom_error_base["compartido/excepciones.py::DominioError<br/>raiz de toda excepcion de negocio"]
+        dom_requerimiento["requerimientos/dominio/base.py::Requerimiento (ABC)<br/>Information Expert: valida estado + rol + identidad"]
+        dom_incidente["dominio/incidente.py::Incidente<br/>+ UrgenciaIncidente · CategoriaIncidente"]
+        dom_solicitud["dominio/solicitud.py::Solicitud<br/>+ CategoriaSolicitud"]
+        dom_comentario["dominio/comentario.py::Comentario (frozen dataclass)<br/>embebido en el agregado"]
+        dom_estados["dominio/estados.py<br/>EstadoRequerimiento (6) · TipoRequerimiento (2)"]
+        dom_eventos["requerimientos/eventos.py<br/>EventoRequerimiento (frozen) · TipoEventoRequerimiento (9)"]
+        dom_fabrica["requerimientos/fabrica.py::FabricaRequerimientos<br/>Factory Method: crear · reconstruir · registrar_tipo"]
+        dom_usuario["usuarios/dominio.py::Usuario<br/>activar · desactivar · cambiar_rol · registrar_acceso · email corporativo · suscripciones"]
+        dom_relacion_sup["supervision/dominio.py::RelacionSupervision<br/>invariante: nadie se supervisa a si mismo"]
+        dom_notificacion["notificaciones/dominio.py::Notificacion<br/>marcar_leida (idempotente)"]
+        dom_exc_req["requerimientos/excepciones.py<br/>TransicionInvalida · TecnicoNoAsignado · NotaResolucionRequerida · PermisoDenegado · RequerimientoNoEncontrado"]
+        dom_exc_usr["usuarios/excepciones.py<br/>UsuarioYaActivo/Inactivo · NoEncontrado · EmailYaRegistrado · EmailCorporativoRequerido · SuscripcionRequerida · CredencialesInvalidas"]
+        dom_exc_sup["supervision/excepciones.py<br/>RelacionInvalida · RelacionYaExiste · RolNoSupervisable"]
+        dom_exc_notif["notificaciones/excepciones.py<br/>NotificacionNoEncontrada"]
+    end
+
+    subgraph sg_puertos["PUERTOS (ABC) — frontera de Dependency Inversion"]
+        direction TB
+        port_repo_usr["usuarios/repositorio.py::RepositorioUsuarios (ABC)<br/>guardar · buscar_por_id · buscar_por_email · listar_todos"]
+        port_repo_req["requerimientos/repositorio.py::RepositorioRequerimientos (ABC)<br/>guardar · buscar_por_id · listar_todos · listar_por_solicitante"]
+        port_repo_sup["supervision/repositorio.py::RepositorioSupervision (ABC)<br/>asignar · remover · existe · listar_supervisados_de · listar_supervisores_de"]
+        port_repo_notif["notificaciones/repositorio.py::RepositorioNotificaciones (ABC)<br/>guardar · buscar_por_id · listar_por_supervisor"]
+        port_observador["notificaciones/observador.py::ObservadorRequerimiento (ABC)<br/>actualizar(evento)"]
+    end
+
+    subgraph sg_observer["PATRON OBSERVER (eventos de dominio)"]
+        direction TB
+        obs_despachador("notificaciones/despachador.py::DespachadorEventos<br/>suscribir · desuscribir · notificar · Sujeto/Observable · instancia NUEVA por request")
+        obs_logger["notificaciones/observador_logger.py::ObservadorLogger<br/>logger 'mesa_de_ayuda.auditoria' · solo stdlib"]
+        obs_mongo["infraestructura/observador_notificaciones.py::ObservadorNotificacionesMongo<br/>si autor es OPERADOR/TECNICO -> 1 Notificacion por supervisor"]
+    end
+
+    subgraph sg_infraestructura["ADAPTADORES PyMongo"]
+        direction TB
+        infra_db["infraestructura/database.py<br/>crear_cliente_mongo · obtener_base_datos · crear_indices · 4 constantes COLECCION_*"]
+        infra_repo_usr["RepositorioUsuariosMongo<br/>_id = str(UUID) · replace_one upsert"]
+        infra_repo_req["RepositorioRequerimientosMongo<br/>_SERIALIZADORES / _DESERIALIZADORES por TipoRequerimiento · historial y comentarios embebidos"]
+        infra_repo_sup["RepositorioSupervisionMongo<br/>delete_one por (supervisor_id, supervisado_id)"]
+        infra_repo_notif["RepositorioNotificacionesMongo<br/>find por supervisor_id"]
+    end
+
+    subgraph sg_persistencia["MONGODB (colecciones reutilizadas del sub-plan 1)"]
+        direction TB
+        db_col_usuarios[("usuarios<br/>indice unico: email")]
+        db_col_req[("requerimientos<br/>indices: solicitante_id, estado, tipo · historial y comentarios embebidos")]
+        db_col_sup[("supervisiones<br/>indices: supervisor_id, supervisado_id")]
+        db_col_notif[("notificaciones<br/>indice: supervisor_id")]
+    end
+
+    subgraph sg_tests["DOBLES DE PRUEBA (evidencia del desacople)"]
+        direction TB
+        test_fakes["tests/fakes.py<br/>FakeRepositorio{Usuarios,Requerimientos,Supervision,Notificaciones} en memoria"]
+        test_lifespan["tests/lifespan.py + dependency_overrides<br/>mongomock · sin Mongo real"]
+    end
+
+    %% --- Entrada y transversales ---
+    pres_main --> pres_router_usr
+    pres_main --> pres_router_req
+    pres_main --> pres_router_sup
+    pres_main --> pres_router_notif
+    pres_main --> pres_errores
+    comp_config --> comp_auth
+    comp_deps --> comp_auth
+    comp_deps --> comp_gate_identidad
+    comp_deps --> comp_gate_rol
+
+    %% --- Router -> DTO ---
+    pres_router_usr --> pres_schemas_usr
+    pres_router_req --> pres_schemas_req
+    pres_router_sup --> pres_schemas_sup
+    pres_router_notif --> pres_schemas_notif
+
+    %% --- Router -> deps -> servicio (inyeccion) ---
+    pres_router_usr --> comp_deps
+    pres_router_req --> comp_deps
+    pres_router_sup --> comp_deps
+    pres_router_notif --> comp_deps
+    comp_deps ==>|"obtener_servicio_usuarios(repo, verificar_password)"| app_srv_usr
+    comp_deps ==>|"obtener_servicio_requerimientos(repo, despachador)"| app_srv_req
+    comp_deps ==>|"obtener_servicio_supervision(repo, repo_usuarios)"| app_srv_sup
+    comp_deps ==>|"obtener_servicio_notificaciones(repo)"| app_srv_notif
+    comp_deps ==>|"obtener_despachador_eventos: NUEVO por request"| obs_despachador
+
+    %% --- Gates ---
+    pres_router_sup -->|"router-level"| comp_gate_rol
+    pres_router_notif -->|"router-level"| comp_gate_rol
+    pres_router_usr -->|"POST/GET /usuarios, PATCH x3, /tecnicos"| comp_gate_rol
+    pres_router_req -.->|"NO usa requerir_rol: valida la entidad"| dom_requerimiento
+    comp_gate_identidad --> app_srv_usr
+
+    %% --- Servicio -> Dominio ---
+    app_srv_req ==>|"FabricaRequerimientos.crear(tipo, **atributos)"| dom_fabrica
+    dom_fabrica --> dom_incidente
+    dom_fabrica --> dom_solicitud
+    app_srv_req ==>|"_aplicar_transicion: delega la regla"| dom_requerimiento
+    app_srv_usr --> dom_usuario
+    app_srv_sup --> dom_relacion_sup
+    app_srv_notif --> dom_notificacion
+    dom_incidente -->|"hereda"| dom_requerimiento
+    dom_solicitud -->|"hereda"| dom_requerimiento
+    dom_requerimiento --> dom_estados
+    dom_requerimiento --> dom_comentario
+    dom_requerimiento ==>|"_registrar_evento"| dom_eventos
+    dom_requerimiento --> dom_compartido
+    dom_usuario --> dom_compartido
+
+    %% --- Excepciones ---
+    dom_exc_req --> dom_error_base
+    dom_exc_usr --> dom_error_base
+    dom_exc_sup --> dom_error_base
+    dom_exc_notif --> dom_error_base
+    dom_requerimiento -->|"raise"| dom_exc_req
+    dom_usuario -->|"raise"| dom_exc_usr
+    dom_error_base ==>|"sube sin try/except en el router"| pres_errores
+    pres_errores -->|"JSONResponse(status_code, detail)"| pres_main
+
+    %% --- Servicio -> Puerto (DIP) ---
+    app_srv_usr -->|"depende de la abstraccion"| port_repo_usr
+    app_srv_req -->|"depende de la abstraccion"| port_repo_req
+    app_srv_sup --> port_repo_sup
+    app_srv_sup --> port_repo_usr
+    app_srv_notif --> port_repo_notif
+
+    %% --- Observer ---
+    app_srv_req ==>|"despachador.notificar(evento)"| obs_despachador
+    obs_despachador -->|"for observador in suscriptos"| port_observador
+    obs_logger -.->|"implementa"| port_observador
+    obs_mongo -.->|"implementa"| port_observador
+    obs_mongo --> port_repo_usr
+    obs_mongo --> port_repo_sup
+    obs_mongo --> port_repo_notif
+    obs_mongo ==>|"crea Notificacion por cada supervisor"| dom_notificacion
+    port_observador -.->|"solo conoce EventoRequerimiento"| dom_eventos
+
+    %% --- Adaptadores (la infra depende del dominio, nunca al reves) ---
+    infra_repo_usr -.->|"implementa"| port_repo_usr
+    infra_repo_req -.->|"implementa"| port_repo_req
+    infra_repo_sup -.->|"implementa"| port_repo_sup
+    infra_repo_notif -.->|"implementa"| port_repo_notif
+    infra_repo_req -->|"FabricaRequerimientos.reconstruir / Incidente.reconstruir"| dom_fabrica
+    infra_repo_usr --> infra_db
+    infra_repo_req --> infra_db
+    infra_repo_sup --> infra_db
+    infra_repo_notif --> infra_db
+    infra_repo_usr ==> db_col_usuarios
+    infra_repo_req ==> db_col_req
+    infra_repo_sup ==> db_col_sup
+    infra_repo_notif ==> db_col_notif
+    comp_deps -->|"construye los adaptadores por request"| infra_repo_usr
+    comp_deps --> infra_repo_req
+    comp_deps --> infra_repo_sup
+    comp_deps --> infra_repo_notif
+
+    %% --- Tests como segunda realizacion de los puertos ---
+    test_fakes -.->|"implementa los 4 puertos"| port_repo_usr
+    test_fakes -.-> port_repo_req
+    test_fakes -.-> port_repo_sup
+    test_fakes -.-> port_repo_notif
+    test_lifespan -.-> pres_main
+
+    classDef capaCliente    fill:#1e3a5f,stroke:#4a90d9,stroke-width:2px,color:#eaf2fb
+    classDef capaRed        fill:#4a2d0a,stroke:#d99a4a,stroke-width:2px,color:#fdf3e6
+    classDef capaApi        fill:#0f3d2e,stroke:#3fbf8f,stroke-width:2px,color:#e8fbf4
+    classDef capaAplicacion fill:#123a4d,stroke:#39a8d0,stroke-width:2px,color:#e7f7fd
+    classDef capaDominio    fill:#3d2a5c,stroke:#a179e0,stroke-width:2px,color:#f3ecff
+    classDef capaInfra      fill:#4a1f2b,stroke:#d9647f,stroke-width:2px,color:#fdeaef
+    classDef capaDatos      fill:#2b2b2b,stroke:#9e9e9e,stroke-width:2px,color:#f0f0f0
+    classDef capaEventos    fill:#553d0a,stroke:#e0b73f,stroke-width:2px,color:#fff8e1
+
+    class pres_main,pres_errores,pres_router_usr,pres_router_req,pres_router_sup,pres_router_notif,pres_schemas_usr,pres_schemas_req,pres_schemas_sup,pres_schemas_notif,comp_deps,comp_auth,comp_config,comp_gate_rol,comp_gate_identidad capaApi
+    class app_srv_usr,app_srv_req,app_srv_sup,app_srv_notif capaAplicacion
+    class dom_compartido,dom_error_base,dom_requerimiento,dom_incidente,dom_solicitud,dom_comentario,dom_estados,dom_fabrica,dom_usuario,dom_relacion_sup,dom_notificacion,dom_exc_req,dom_exc_usr,dom_exc_sup,dom_exc_notif,port_repo_usr,port_repo_req,port_repo_sup,port_repo_notif,port_observador capaDominio
+    class dom_eventos,obs_despachador,obs_logger,obs_mongo capaEventos
+    class infra_db,infra_repo_usr,infra_repo_req,infra_repo_sup,infra_repo_notif capaInfra
+    class db_col_usuarios,db_col_req,db_col_sup,db_col_notif capaDatos
