@@ -36,7 +36,7 @@ El proyecto está organizado en tres capas independientes que se comunican
 │   └── js/, css/         fetch a la API, sin frameworks ni build step
 ├── scripts/
 │   └── seed_mongo.py     Script de siembra de datos de ejemplo en MongoDB
-├── tests/                232 tests (pytest)
+├── tests/                257 tests (pytest)
 ├── bruno/                Colección de requests HTTP (Bruno) para probar la API
 ├── Dockerfile            Imagen multi-stage de la API (uv + usuario no-root)
 └── docker-compose.yml    Orquesta la API + MongoDB
@@ -304,7 +304,7 @@ probarse con la colección de Bruno (`bruno/03-supervision/`,
 
 ## Tests
 
-Correr toda la suite (232 tests):
+Correr toda la suite (257 tests):
 
 ```bash
 uv run pytest

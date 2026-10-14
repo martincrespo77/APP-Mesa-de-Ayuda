@@ -430,3 +430,109 @@ class TestComentariosYDerivacionViaHttp:
         # Assert
         assert respuesta.status_code == 200
         assert respuesta.json()["tecnico_asignado_id"] == str(tecnico_destino.id)
+
+
+class TestValidacionDelTecnicoDestinoViaHTTP:
+    """El id de técnico del body tiene que referenciar a un Técnico activo (400)."""
+
+    def _ticket_en_analisis(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> tuple[str, str]:
+        """Deja un incidente en EN_ANALISIS y devuelve (id, token del operador)."""
+        solicitante = _crear_usuario(repo_usuarios, "sol@x.com", RolUsuario.SOLICITANTE)
+        _crear_usuario(repo_usuarios, "op@comunicarlos.com.ar", RolUsuario.OPERADOR)
+        token_operador = _token_de(cliente, "op@comunicarlos.com.ar")
+        creado = cliente.post(
+            "/requerimientos",
+            json=_BODY_INCIDENTE,
+            headers=_headers(_token_de(cliente, solicitante.email)),
+        )
+        requerimiento_id = str(creado.json()["id"])
+        cliente.post(
+            f"/requerimientos/{requerimiento_id}/iniciar-analisis",
+            headers=_headers(token_operador),
+        )
+        return requerimiento_id, token_operador
+
+    def test_asignar_un_uuid_inexistente_devuelve_400(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange
+        requerimiento_id, token_operador = self._ticket_en_analisis(cliente, repo_usuarios)
+
+        # Act
+        respuesta = cliente.post(
+            f"/requerimientos/{requerimiento_id}/asignar-tecnico",
+            json={"tecnico_id": str(uuid.uuid4())},
+            headers=_headers(token_operador),
+        )
+
+        # Assert
+        assert respuesta.status_code == 400
+
+    def test_asignar_el_id_de_un_solicitante_devuelve_400(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange
+        requerimiento_id, token_operador = self._ticket_en_analisis(cliente, repo_usuarios)
+        otro_solicitante = _crear_usuario(repo_usuarios, "otro@x.com", RolUsuario.SOLICITANTE)
+
+        # Act
+        respuesta = cliente.post(
+            f"/requerimientos/{requerimiento_id}/asignar-tecnico",
+            json={"tecnico_id": str(otro_solicitante.id)},
+            headers=_headers(token_operador),
+        )
+
+        # Assert: el ticket no queda asignado a alguien que no es Técnico
+        assert respuesta.status_code == 400
+        detalle = cliente.get(
+            f"/requerimientos/{requerimiento_id}", headers=_headers(token_operador)
+        )
+        assert detalle.json()["tecnico_asignado_id"] is None
+
+    def test_asignar_un_tecnico_desactivado_devuelve_400(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange
+        requerimiento_id, token_operador = self._ticket_en_analisis(cliente, repo_usuarios)
+        de_baja = _crear_usuario(repo_usuarios, "exttec@comunicarlos.com.ar", RolUsuario.TECNICO)
+        de_baja.desactivar()
+        repo_usuarios.guardar(de_baja)
+
+        # Act
+        respuesta = cliente.post(
+            f"/requerimientos/{requerimiento_id}/asignar-tecnico",
+            json={"tecnico_id": str(de_baja.id)},
+            headers=_headers(token_operador),
+        )
+
+        # Assert
+        assert respuesta.status_code == 400
+
+    def test_derivar_a_un_uuid_inexistente_devuelve_400(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange
+        requerimiento_id, token_operador = self._ticket_en_analisis(cliente, repo_usuarios)
+        tecnico = _crear_usuario(repo_usuarios, "tec@comunicarlos.com.ar", RolUsuario.TECNICO)
+        cliente.post(
+            f"/requerimientos/{requerimiento_id}/asignar-tecnico",
+            json={"tecnico_id": str(tecnico.id)},
+            headers=_headers(token_operador),
+        )
+
+        # Act
+        respuesta = cliente.post(
+            f"/requerimientos/{requerimiento_id}/derivar",
+            json={"tecnico_destino_id": str(uuid.uuid4())},
+            headers=_headers(_token_de(cliente, tecnico.email)),
+        )
+
+        # Assert: sigue asignado al técnico original
+        assert respuesta.status_code == 400
+        detalle = cliente.get(
+            f"/requerimientos/{requerimiento_id}", headers=_headers(token_operador)
+        )
+        assert detalle.json()["tecnico_asignado_id"] == str(tecnico.id)
+

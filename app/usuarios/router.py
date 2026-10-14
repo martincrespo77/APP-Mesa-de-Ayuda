@@ -58,7 +58,8 @@ def login(
 
 @router.post("/registro", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
 def registrarse(
-    datos: RegistroSolicitanteRequest, servicio: ServicioUsuarios = Depends(obtener_servicio_usuarios)
+    datos: RegistroSolicitanteRequest,
+    servicio: ServicioUsuarios = Depends(obtener_servicio_usuarios),
 ) -> UsuarioResponse:
     """Auto-registro público (sin autenticación): siempre crea un
     SOLICITANTE. `RegistroSolicitanteRequest` no tiene campo `rol`, así que

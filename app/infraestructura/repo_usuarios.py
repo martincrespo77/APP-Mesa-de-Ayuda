@@ -16,10 +16,12 @@ from typing import Any
 
 from pymongo.collection import Collection
 from pymongo.database import Database
+from pymongo.errors import DuplicateKeyError
 
 from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.infraestructura.database import COLECCION_USUARIOS
 from app.usuarios.dominio import Usuario
+from app.usuarios.excepciones import EmailYaRegistradoError
 from app.usuarios.repositorio import RepositorioUsuarios
 
 
@@ -30,8 +32,23 @@ class RepositorioUsuariosMongo(RepositorioUsuarios):
         self._coleccion: Collection[dict[str, Any]] = db[COLECCION_USUARIOS]
 
     def guardar(self, usuario: Usuario) -> None:
+        """Inserta o actualiza el usuario, traduciendo el choque de email único.
+
+        `ServicioUsuarios.registrar` ya chequea el duplicado antes de llamar
+        acá, pero entre ese chequeo y esta escritura hay una ventana: dos
+        altas concurrentes del mismo email pasan las dos el control y una
+        choca contra el índice único de `email`. `DuplicateKeyError` no
+        hereda de `DominioError`, así que sin esta traducción se escaparía
+        del `exception_handler` como un HTTP 500 en vez del 409 que
+        corresponde.
+        """
         documento = _a_documento(usuario)
-        self._coleccion.replace_one({"_id": documento["_id"]}, documento, upsert=True)
+        try:
+            self._coleccion.replace_one({"_id": documento["_id"]}, documento, upsert=True)
+        except DuplicateKeyError as error:
+            raise EmailYaRegistradoError(
+                f"El email '{usuario.email}' ya está registrado."
+            ) from error
 
     def buscar_por_id(self, usuario_id: uuid.UUID) -> Usuario | None:
         documento = self._coleccion.find_one({"_id": str(usuario_id)})

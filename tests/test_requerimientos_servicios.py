@@ -15,9 +15,14 @@ from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerim
 from app.requerimientos.dominio.incidente import CategoriaIncidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
-from app.requerimientos.excepciones import PermisoDenegadoError, RequerimientoNoEncontradoError
+from app.requerimientos.excepciones import (
+    PermisoDenegadoError,
+    RequerimientoNoEncontradoError,
+    TecnicoInvalidoError,
+)
 from app.requerimientos.servicios import ServicioRequerimientos
-from tests.fakes import FakeRepositorioRequerimientos
+from app.usuarios.dominio import Usuario
+from tests.fakes import FakeRepositorioRequerimientos, FakeRepositorioUsuarios
 
 
 class _ObservadorEspia(ObservadorRequerimiento):
@@ -46,10 +51,50 @@ def despachador(espia: _ObservadorEspia) -> DespachadorEventos:
 
 
 @pytest.fixture
+def repo_usuarios() -> FakeRepositorioUsuarios:
+    return FakeRepositorioUsuarios()
+
+
+def _alta_usuario(
+    repo: FakeRepositorioUsuarios, email: str, rol: RolUsuario, activo: bool = True
+) -> Usuario:
+    """Da de alta un usuario real en el repositorio fake.
+
+    `asignar_tecnico`/`derivar_interconsulta` ahora exigen que el destino
+    sea un Técnico activo existente, así que los tests ya no pueden pasar
+    un `uuid.uuid4()` suelto como id de técnico.
+    """
+    servicios = (
+        frozenset({ServicioComunicarlos.INTERNET_BANDA_ANCHA})
+        if rol == RolUsuario.SOLICITANTE
+        else frozenset()
+    )
+    usuario = Usuario(
+        email.split("@")[0], email, "hash-irrelevante", rol, servicios_suscriptos=servicios
+    )
+    if not activo:
+        usuario.desactivar()
+    repo.guardar(usuario)
+    return usuario
+
+
+@pytest.fixture
+def tecnico(repo_usuarios: FakeRepositorioUsuarios) -> Usuario:
+    return _alta_usuario(repo_usuarios, "ivan.rios@comunicarlos.com.ar", RolUsuario.TECNICO)
+
+
+@pytest.fixture
+def tecnico_destino(repo_usuarios: FakeRepositorioUsuarios) -> Usuario:
+    return _alta_usuario(repo_usuarios, "marta.suarez@comunicarlos.com.ar", RolUsuario.TECNICO)
+
+
+@pytest.fixture
 def servicio(
-    repositorio: FakeRepositorioRequerimientos, despachador: DespachadorEventos
+    repositorio: FakeRepositorioRequerimientos,
+    despachador: DespachadorEventos,
+    repo_usuarios: FakeRepositorioUsuarios,
 ) -> ServicioRequerimientos:
-    return ServicioRequerimientos(repositorio, despachador)
+    return ServicioRequerimientos(repositorio, despachador, repo_usuarios)
 
 
 @pytest.fixture
@@ -226,10 +271,11 @@ class TestTransicionesViaServicio:
         repositorio: FakeRepositorioRequerimientos,
         solicitante_id: uuid.UUID,
         espia: _ObservadorEspia,
+        tecnico: Usuario,
     ) -> None:
         # Arrange
         requerimiento = _crear_incidente(servicio, solicitante_id)
-        tecnico_id = uuid.uuid4()
+        tecnico_id = tecnico.id
 
         # Act
         servicio.iniciar_analisis(requerimiento.id, uuid.uuid4(), RolUsuario.OPERADOR)
@@ -272,10 +318,11 @@ class TestComentariosYDerivacionViaServicio:
         servicio: ServicioRequerimientos,
         solicitante_id: uuid.UUID,
         espia: _ObservadorEspia,
+        tecnico: Usuario,
     ) -> None:
         # Arrange: lleva el incidente hasta RESUELTO
         requerimiento = _crear_incidente(servicio, solicitante_id)
-        tecnico_id = uuid.uuid4()
+        tecnico_id = tecnico.id
         servicio.iniciar_analisis(requerimiento.id, uuid.uuid4(), RolUsuario.OPERADOR)
         servicio.asignar_tecnico(requerimiento.id, tecnico_id, uuid.uuid4(), RolUsuario.OPERADOR)
         servicio.iniciar_progreso(requerimiento.id, tecnico_id, RolUsuario.TECNICO)
@@ -299,11 +346,13 @@ class TestComentariosYDerivacionViaServicio:
         servicio: ServicioRequerimientos,
         repositorio: FakeRepositorioRequerimientos,
         solicitante_id: uuid.UUID,
+        tecnico: Usuario,
+        tecnico_destino: Usuario,
     ) -> None:
         # Arrange
         requerimiento = _crear_incidente(servicio, solicitante_id)
-        tecnico_origen_id = uuid.uuid4()
-        tecnico_destino_id = uuid.uuid4()
+        tecnico_origen_id = tecnico.id
+        tecnico_destino_id = tecnico_destino.id
         servicio.iniciar_analisis(requerimiento.id, uuid.uuid4(), RolUsuario.OPERADOR)
         servicio.asignar_tecnico(
             requerimiento.id, tecnico_origen_id, uuid.uuid4(), RolUsuario.OPERADOR
@@ -318,3 +367,127 @@ class TestComentariosYDerivacionViaServicio:
         persistido = repositorio.buscar_por_id(requerimiento.id)
         assert persistido is not None
         assert persistido.tecnico_asignado_id == tecnico_destino_id
+
+
+class TestValidacionDelTecnicoDestino:
+    """`asignar_tecnico` y `derivar_interconsulta` solo aceptan Técnicos activos.
+
+    La entidad no puede validarlo (dominio puro, sin acceso a usuarios), así
+    que la regla vive en el servicio. Sin ella, un ticket puede quedar
+    "asignado" a un Solicitante o a un UUID inexistente y salirse del
+    circuito técnico: el asignado no puede iniciar progreso ni derivar.
+    """
+
+    def _en_analisis(
+        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
+    ) -> uuid.UUID:
+        requerimiento = _crear_incidente(servicio, solicitante_id)
+        servicio.iniciar_analisis(requerimiento.id, uuid.uuid4(), RolUsuario.OPERADOR)
+        return requerimiento.id
+
+    def test_asignar_a_un_id_inexistente_lanza_tecnico_invalido(
+        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
+    ) -> None:
+        # Arrange
+        requerimiento_id = self._en_analisis(servicio, solicitante_id)
+
+        # Act & Assert
+        with pytest.raises(TecnicoInvalidoError):
+            servicio.asignar_tecnico(
+                requerimiento_id, uuid.uuid4(), uuid.uuid4(), RolUsuario.OPERADOR
+            )
+
+    def test_asignar_a_un_solicitante_lanza_tecnico_invalido(
+        self,
+        servicio: ServicioRequerimientos,
+        repo_usuarios: FakeRepositorioUsuarios,
+        solicitante_id: uuid.UUID,
+    ) -> None:
+        # Arrange: un usuario real, pero con rol SOLICITANTE
+        no_tecnico = _alta_usuario(repo_usuarios, "lucia.gomez@mail.com", RolUsuario.SOLICITANTE)
+        requerimiento_id = self._en_analisis(servicio, solicitante_id)
+
+        # Act & Assert
+        with pytest.raises(TecnicoInvalidoError):
+            servicio.asignar_tecnico(
+                requerimiento_id, no_tecnico.id, uuid.uuid4(), RolUsuario.OPERADOR
+            )
+
+    def test_asignar_a_un_tecnico_desactivado_lanza_tecnico_invalido(
+        self,
+        servicio: ServicioRequerimientos,
+        repo_usuarios: FakeRepositorioUsuarios,
+        solicitante_id: uuid.UUID,
+    ) -> None:
+        # Arrange
+        de_baja = _alta_usuario(
+            repo_usuarios, "egresado@comunicarlos.com.ar", RolUsuario.TECNICO, activo=False
+        )
+        requerimiento_id = self._en_analisis(servicio, solicitante_id)
+
+        # Act & Assert
+        with pytest.raises(TecnicoInvalidoError):
+            servicio.asignar_tecnico(
+                requerimiento_id, de_baja.id, uuid.uuid4(), RolUsuario.OPERADOR
+            )
+
+    def test_asignar_no_muta_el_requerimiento_si_el_destino_es_invalido(
+        self,
+        servicio: ServicioRequerimientos,
+        repositorio: FakeRepositorioRequerimientos,
+        solicitante_id: uuid.UUID,
+    ) -> None:
+        # Arrange
+        requerimiento_id = self._en_analisis(servicio, solicitante_id)
+
+        # Act
+        with pytest.raises(TecnicoInvalidoError):
+            servicio.asignar_tecnico(
+                requerimiento_id, uuid.uuid4(), uuid.uuid4(), RolUsuario.OPERADOR
+            )
+
+        # Assert: se rechaza ANTES de tocar la entidad
+        persistido = repositorio.buscar_por_id(requerimiento_id)
+        assert persistido is not None
+        assert persistido.tecnico_asignado_id is None
+        assert persistido.estado == EstadoRequerimiento.EN_ANALISIS
+
+    def test_derivar_a_un_id_inexistente_lanza_tecnico_invalido(
+        self,
+        servicio: ServicioRequerimientos,
+        solicitante_id: uuid.UUID,
+        tecnico: Usuario,
+    ) -> None:
+        # Arrange
+        requerimiento_id = self._en_analisis(servicio, solicitante_id)
+        servicio.asignar_tecnico(requerimiento_id, tecnico.id, uuid.uuid4(), RolUsuario.OPERADOR)
+
+        # Act & Assert
+        with pytest.raises(TecnicoInvalidoError):
+            servicio.derivar_interconsulta(
+                requerimiento_id, uuid.uuid4(), tecnico.id, RolUsuario.TECNICO
+            )
+
+    def test_derivar_a_un_no_tecnico_lanza_tecnico_invalido(
+        self,
+        servicio: ServicioRequerimientos,
+        repositorio: FakeRepositorioRequerimientos,
+        repo_usuarios: FakeRepositorioUsuarios,
+        solicitante_id: uuid.UUID,
+        tecnico: Usuario,
+    ) -> None:
+        # Arrange
+        operador = _alta_usuario(repo_usuarios, "rosa@comunicarlos.com.ar", RolUsuario.OPERADOR)
+        requerimiento_id = self._en_analisis(servicio, solicitante_id)
+        servicio.asignar_tecnico(requerimiento_id, tecnico.id, uuid.uuid4(), RolUsuario.OPERADOR)
+
+        # Act & Assert
+        with pytest.raises(TecnicoInvalidoError):
+            servicio.derivar_interconsulta(
+                requerimiento_id, operador.id, tecnico.id, RolUsuario.TECNICO
+            )
+
+        # El técnico original sigue asignado: la derivación no se aplicó
+        persistido = repositorio.buscar_por_id(requerimiento_id)
+        assert persistido is not None
+        assert persistido.tecnico_asignado_id == tecnico.id

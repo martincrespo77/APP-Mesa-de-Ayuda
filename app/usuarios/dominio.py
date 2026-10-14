@@ -121,10 +121,25 @@ class Usuario:
         return nombre_normalizado
 
     @staticmethod
-    def _validar_email(email: str, rol: RolUsuario) -> str:
+    def normalizar_email(email: str) -> str:
+        """Forma canónica de un email: sin espacios al borde y en minúsculas.
+
+        El email es la identidad de login, y es case-insensitive por
+        convención: `Lucia.Gomez@...` y `lucia.gomez@...` son la MISMA
+        persona. La entidad siempre se guarda con esta forma, así que
+        cualquier búsqueda por email (login, chequeo de duplicados) tiene
+        que normalizar primero o no encuentra al usuario que sí existe.
+        Es público a propósito: `ServicioUsuarios` lo necesita antes de
+        consultar al repositorio, y la regla pertenece a la entidad
+        (Information Expert), no a la capa de aplicación ni al adaptador.
+        """
         if not isinstance(email, str):
             raise TypeError("El email debe ser una cadena de texto.")
-        email_normalizado = email.strip().lower()
+        return email.strip().lower()
+
+    @staticmethod
+    def _validar_email(email: str, rol: RolUsuario) -> str:
+        email_normalizado = Usuario.normalizar_email(email)
         if not _PATRON_EMAIL.match(email_normalizado):
             raise ValueError(f"El email '{email}' no tiene un formato válido.")
         Usuario._validar_dominio_corporativo(email_normalizado, rol)

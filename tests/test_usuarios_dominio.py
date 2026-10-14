@@ -62,7 +62,9 @@ class TestCreacionDeUsuario:
         with pytest.raises(TypeError):
             Usuario("Ana", "ana@comunicarlos.com.ar", "hash", "OPERADOR")  # type: ignore[arg-type]
 
-    @pytest.mark.parametrize("rol", [RolUsuario.OPERADOR, RolUsuario.TECNICO, RolUsuario.SUPERVISOR])
+    @pytest.mark.parametrize(
+        "rol", [RolUsuario.OPERADOR, RolUsuario.TECNICO, RolUsuario.SUPERVISOR]
+    )
     def test_rol_operativo_con_email_no_corporativo_lanza_error(self, rol: RolUsuario) -> None:
         # Act & Assert: Operador/Técnico/Supervisor exigen "@comunicarlos.com.ar"
         with pytest.raises(EmailCorporativoRequeridoError):

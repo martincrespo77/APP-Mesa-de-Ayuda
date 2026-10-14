@@ -20,19 +20,28 @@ from app.requerimientos.dominio.base import Requerimiento
 from app.requerimientos.dominio.comentario import Comentario
 from app.requerimientos.dominio.estados import TipoRequerimiento
 from app.requerimientos.eventos import EventoRequerimiento
-from app.requerimientos.excepciones import PermisoDenegadoError, RequerimientoNoEncontradoError
+from app.requerimientos.excepciones import (
+    PermisoDenegadoError,
+    RequerimientoNoEncontradoError,
+    TecnicoInvalidoError,
+)
 from app.requerimientos.fabrica import FabricaRequerimientos
 from app.requerimientos.repositorio import RepositorioRequerimientos
+from app.usuarios.repositorio import RepositorioUsuarios
 
 
 class ServicioRequerimientos:
     """Orquesta la creación, consulta y ciclo de vida de los `Requerimiento`."""
 
     def __init__(
-        self, repositorio: RepositorioRequerimientos, despachador: DespachadorEventos
+        self,
+        repositorio: RepositorioRequerimientos,
+        despachador: DespachadorEventos,
+        repositorio_usuarios: RepositorioUsuarios,
     ) -> None:
         self._repositorio = repositorio
         self._despachador = despachador
+        self._repositorio_usuarios = repositorio_usuarios
 
     def crear(self, tipo: TipoRequerimiento, **atributos: Any) -> Requerimiento:
         """Crea un requerimiento (cualquier rol puede crear el propio) y lo persiste."""
@@ -87,6 +96,8 @@ class ServicioRequerimientos:
         autor_id: uuid.UUID,
         rol_actor: RolUsuario,
     ) -> Requerimiento:
+        """Asigna un técnico, exigiendo que el destino sea un Técnico activo real."""
+        self._exigir_tecnico_valido(tecnico_id)
         return self._aplicar_transicion(
             requerimiento_id, lambda req: req.asignar_tecnico(tecnico_id, autor_id, rol_actor)
         )
@@ -148,10 +159,35 @@ class ServicioRequerimientos:
         autor_id: uuid.UUID,
         rol_actor: RolUsuario,
     ) -> Requerimiento:
+        """Deriva a otro técnico, exigiendo que el destino sea un Técnico activo real."""
+        self._exigir_tecnico_valido(tecnico_destino_id)
         return self._aplicar_transicion(
             requerimiento_id,
             lambda req: req.derivar_interconsulta(tecnico_destino_id, autor_id, rol_actor),
         )
+
+    def _exigir_tecnico_valido(self, tecnico_id: uuid.UUID) -> None:
+        """Exige que `tecnico_id` sea un Técnico existente y activo.
+
+        Sin este control, `asignar-tecnico` y `derivar` aceptan cualquier
+        UUID: el id de un Solicitante, o uno inexistente. El ticket queda
+        entonces fuera del circuito técnico — el "asignado" no puede
+        iniciar progreso ni derivar (ambas exigen rol TECNICO + ser el
+        asignado), así que solo un Supervisor lo rescata. También evita
+        asignarle trabajo a un técnico dado de baja.
+        """
+        tecnico = self._repositorio_usuarios.buscar_por_id(tecnico_id)
+        if tecnico is None:
+            raise TecnicoInvalidoError(f"No existe un usuario con id '{tecnico_id}'.")
+        if tecnico.rol != RolUsuario.TECNICO:
+            raise TecnicoInvalidoError(
+                f"El usuario '{tecnico_id}' tiene rol '{tecnico.rol.value}': solo se puede "
+                "asignar o derivar un requerimiento a un Técnico."
+            )
+        if not tecnico.activo:
+            raise TecnicoInvalidoError(
+                f"El técnico '{tecnico_id}' está desactivado y no puede recibir requerimientos."
+            )
 
     def _buscar_o_lanzar(self, requerimiento_id: uuid.UUID) -> Requerimiento:
         requerimiento = self._repositorio.buscar_por_id(requerimiento_id)

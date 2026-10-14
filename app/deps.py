@@ -107,8 +107,9 @@ def obtener_servicio_usuarios(
 def obtener_servicio_requerimientos(
     repositorio: RepositorioRequerimientos = Depends(obtener_repositorio_requerimientos),
     despachador: DespachadorEventos = Depends(obtener_despachador_eventos),
+    repositorio_usuarios: RepositorioUsuarios = Depends(obtener_repositorio_usuarios),
 ) -> ServicioRequerimientos:
-    return ServicioRequerimientos(repositorio, despachador)
+    return ServicioRequerimientos(repositorio, despachador, repositorio_usuarios)
 
 
 def obtener_servicio_supervision(

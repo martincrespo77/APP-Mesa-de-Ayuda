@@ -25,3 +25,14 @@ class PermisoDenegadoError(RequerimientoError):
 
 class RequerimientoNoEncontradoError(RequerimientoError):
     """Lanzada al operar sobre un id de requerimiento que no existe en el repositorio."""
+
+
+class TecnicoInvalidoError(RequerimientoError):
+    """Lanzada al asignar o derivar a un id que no es un Técnico activo existente.
+
+    La valida `ServicioRequerimientos`, no la entidad: `Requerimiento` es
+    dominio puro y no conoce el módulo de usuarios ni tiene acceso a
+    repositorios, así que no puede saber si un UUID corresponde a un
+    Técnico. Mismo criterio que `ServicioSupervision` con el rol del
+    supervisado.
+    """

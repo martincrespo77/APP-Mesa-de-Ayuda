@@ -14,6 +14,7 @@ from app.requerimientos.excepciones import (
     NotaResolucionRequeridaError,
     PermisoDenegadoError,
     RequerimientoNoEncontradoError,
+    TecnicoInvalidoError,
     TecnicoNoAsignadoError,
     TransicionInvalidaError,
 )
@@ -33,6 +34,9 @@ _CODIGOS_HTTP: dict[type[DominioError], int] = {
     TransicionInvalidaError: status.HTTP_409_CONFLICT,
     TecnicoNoAsignadoError: status.HTTP_409_CONFLICT,
     NotaResolucionRequeridaError: status.HTTP_409_CONFLICT,
+    # El id de técnico es un dato del body que no referencia a un Técnico
+    # activo: es un request mal formado (400), no un conflicto de estado.
+    TecnicoInvalidoError: status.HTTP_400_BAD_REQUEST,
     EmailYaRegistradoError: status.HTTP_409_CONFLICT,
     UsuarioYaActivoError: status.HTTP_409_CONFLICT,
     UsuarioYaInactivoError: status.HTTP_409_CONFLICT,

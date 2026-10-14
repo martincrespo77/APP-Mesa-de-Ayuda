@@ -36,9 +36,18 @@ class ServicioUsuarios:
         rol: RolUsuario,
         servicios_suscriptos: frozenset[ServicioComunicarlos] | None = None,
     ) -> Usuario:
-        """Crea un nuevo usuario, exigiendo que el email no esté en uso."""
-        if self._repositorio.buscar_por_email(email) is not None:
-            raise EmailYaRegistradoError(f"El email '{email}' ya está registrado.")
+        """Crea un nuevo usuario, exigiendo que el email no esté en uso.
+
+        El chequeo de duplicado usa el email NORMALIZADO (igual que lo
+        guarda `Usuario`): si se comparara el texto crudo, un alta con
+        `Lucia.Gomez@...` sobre un `lucia.gomez@...` existente pasaría el
+        control y recién fallaría contra el índice único de Mongo, con un
+        `DuplicateKeyError` que no es `DominioError` y se escapa como
+        HTTP 500 en vez del 409 que corresponde.
+        """
+        email_normalizado = Usuario.normalizar_email(email)
+        if self._repositorio.buscar_por_email(email_normalizado) is not None:
+            raise EmailYaRegistradoError(f"El email '{email_normalizado}' ya está registrado.")
         usuario = Usuario(
             nombre_completo=nombre_completo,
             email=email,
@@ -56,7 +65,7 @@ class ServicioUsuarios:
         (`app/auth.py`); el servicio recibe la función de verificación por inyección
         para no importar `bcrypt` desde la capa de dominio/aplicación.
         """
-        usuario = self._repositorio.buscar_por_email(email)
+        usuario = self._repositorio.buscar_por_email(Usuario.normalizar_email(email))
         credenciales_validas = usuario is not None and self._verificador_password(
             password, usuario.password_hash
         )
@@ -70,7 +79,7 @@ class ServicioUsuarios:
         return self._repositorio.buscar_por_id(usuario_id)
 
     def obtener_por_email(self, email: str) -> Usuario | None:
-        return self._repositorio.buscar_por_email(email)
+        return self._repositorio.buscar_por_email(Usuario.normalizar_email(email))
 
     def listar_todos(self) -> list[Usuario]:
         return self._repositorio.listar_todos()

@@ -69,6 +69,26 @@ function formatearFecha(iso) {
     return new Date(iso).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
 }
 
+/**
+ * Escapa texto que viene de la API antes de interpolarlo en una plantilla
+ * que se asigna por `innerHTML`. Es obligatorio para TODO dato cargado por
+ * un usuario (título, descripción, pasos, nota de resolución, detalle de
+ * evento, nombre, email): sin esto, un Solicitante puede guardar HTML en el
+ * título de un ticket y ese HTML se ejecuta en la sesión del Operador o del
+ * Supervisor que abre la bandeja (XSS almacenado), con el JWT accesible en
+ * localStorage. El dominio no valida esto a propósito — un título es texto
+ * libre legítimo —, así que el escapado es responsabilidad del render.
+ */
+function escaparHtml(valor) {
+    if (valor === null || valor === undefined) return "";
+    return String(valor)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+}
+
 // -- Perfil del usuario actual ------------------------------------------------
 
 let usuarioActual = null;
@@ -304,9 +324,11 @@ const errorListado = document.getElementById("error-listado");
 
 function metaEspecifica(ticket) {
     if (ticket.tipo === "INCIDENTE") {
-        return `Urgencia: ${ETIQUETAS_URGENCIA[ticket.urgencia] ?? ticket.urgencia}`;
+        return `Urgencia: ${escaparHtml(ETIQUETAS_URGENCIA[ticket.urgencia] ?? ticket.urgencia)}`;
     }
-    return `Categoría: ${ETIQUETAS_CATEGORIA_SOLICITUD[ticket.categoria] ?? ticket.categoria}`;
+    return `Categoría: ${escaparHtml(
+        ETIQUETAS_CATEGORIA_SOLICITUD[ticket.categoria] ?? ticket.categoria,
+    )}`;
 }
 
 function requiereAtencionUrgente(ticket) {
@@ -323,10 +345,12 @@ function renderizarTicket(ticket) {
     div.innerHTML = `
         <div class="ticket-encabezado">
             <div>
-                <div class="ticket-titulo">${ticket.titulo}</div>
+                <div class="ticket-titulo">${escaparHtml(ticket.titulo)}</div>
                 <div class="ticket-meta">${metaEspecifica(ticket)} · Creado: ${formatearFecha(ticket.fecha_creacion)}</div>
             </div>
-            <span class="badge badge-${ticket.estado}">${ETIQUETAS_ESTADO[ticket.estado] ?? ticket.estado}</span>
+            <span class="badge badge-${escaparHtml(ticket.estado)}">${escaparHtml(
+                ETIQUETAS_ESTADO[ticket.estado] ?? ticket.estado,
+            )}</span>
         </div>
     `;
     div.addEventListener("click", () => mostrarDetalle(ticket));
@@ -537,13 +561,28 @@ function puedeComentar(ticket) {
 }
 
 function filaDetalle(etiqueta, valor) {
-    return `<div class="detalle-fila"><span>${etiqueta}</span><span>${valor}</span></div>`;
+    // Escapa por defecto: la mayoría de los valores son texto cargado por un
+    // usuario. El único caso que necesita HTML real usa `filaDetalleHtml`.
+    return `<div class="detalle-fila"><span>${escaparHtml(etiqueta)}</span><span>${escaparHtml(
+        valor,
+    )}</span></div>`;
+}
+
+function filaDetalleHtml(etiqueta, htmlConfiable) {
+    // Solo para HTML construido por esta app (ej. el badge de estado), nunca
+    // para datos que vengan de la API.
+    return `<div class="detalle-fila"><span>${escaparHtml(etiqueta)}</span><span>${htmlConfiable}</span></div>`;
 }
 
 function opcionesTecnicos(excluirId) {
     return tecnicosCache
         .filter((tecnico) => tecnico.id !== excluirId)
-        .map((tecnico) => `<option value="${tecnico.id}">${tecnico.nombre_completo}</option>`)
+        .map(
+            (tecnico) =>
+                `<option value="${escaparHtml(tecnico.id)}">${escaparHtml(
+                    tecnico.nombre_completo,
+                )}</option>`,
+        )
         .join("");
 }
 
@@ -581,9 +620,11 @@ function mostrarDetalle(ticket) {
 
     const filas = [
         filaDetalle("Tipo", ticket.tipo === "INCIDENTE" ? "Incidente" : "Solicitud"),
-        filaDetalle(
+        filaDetalleHtml(
             "Estado",
-            `<span class="badge badge-${ticket.estado}">${ETIQUETAS_ESTADO[ticket.estado] ?? ticket.estado}</span>`,
+            `<span class="badge badge-${escaparHtml(ticket.estado)}">${escaparHtml(
+                ETIQUETAS_ESTADO[ticket.estado] ?? ticket.estado,
+            )}</span>`,
         ),
         filaDetalle("Descripción", ticket.descripcion),
     ];
@@ -623,9 +664,11 @@ function mostrarDetalle(ticket) {
         .map(
             (evento) => `
                 <div class="historial-evento">
-                    <span class="tipo">${ETIQUETAS_EVENTO[evento.tipo_evento] ?? evento.tipo_evento}</span>
+                    <span class="tipo">${escaparHtml(
+                        ETIQUETAS_EVENTO[evento.tipo_evento] ?? evento.tipo_evento,
+                    )}</span>
                     · <span class="fecha">${formatearFecha(evento.timestamp)}</span>
-                    <div>${evento.detalle}</div>
+                    <div>${escaparHtml(evento.detalle)}</div>
                 </div>
             `,
         )
@@ -794,8 +837,12 @@ function renderizarNotificacion(notificacion) {
     div.innerHTML = `
         <div class="ticket-encabezado">
             <div>
-                <div class="ticket-titulo">${ETIQUETAS_EVENTO[notificacion.tipo_evento] ?? notificacion.tipo_evento} — ${nombreUsuario(notificacion.empleado_supervisado_id)}</div>
-                <div class="ticket-meta">${notificacion.detalle} · ${formatearFecha(notificacion.timestamp)}</div>
+                <div class="ticket-titulo">${escaparHtml(
+                    ETIQUETAS_EVENTO[notificacion.tipo_evento] ?? notificacion.tipo_evento,
+                )} — ${escaparHtml(nombreUsuario(notificacion.empleado_supervisado_id))}</div>
+                <div class="ticket-meta">${escaparHtml(notificacion.detalle)} · ${formatearFecha(
+                    notificacion.timestamp,
+                )}</div>
             </div>
         </div>
         <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
@@ -878,8 +925,12 @@ function renderizarEquipo() {
         div.innerHTML = `
             <div class="ticket-encabezado">
                 <div>
-                    <div class="ticket-titulo">${usuario?.nombre_completo ?? relacion.supervisado_id}</div>
-                    <div class="ticket-meta">${usuario?.rol ?? ""} · Supervisado desde: ${formatearFecha(relacion.fecha_asignacion)}</div>
+                    <div class="ticket-titulo">${escaparHtml(
+                        usuario?.nombre_completo ?? relacion.supervisado_id,
+                    )}</div>
+                    <div class="ticket-meta">${escaparHtml(usuario?.rol ?? "")} · Supervisado desde: ${formatearFecha(
+                        relacion.fecha_asignacion,
+                    )}</div>
                 </div>
                 <button type="button" class="secundario boton-quitar-supervisado">Quitar</button>
             </div>
@@ -905,7 +956,12 @@ function poblarSelectNuevoSupervisado() {
         (u) => ROLES_SUPERVISABLES.has(u.rol) && u.activo && !yaSupervisados.has(u.id),
     );
     selectNuevoSupervisado.innerHTML = candidatos
-        .map((u) => `<option value="${u.id}">${u.nombre_completo} (${u.rol})</option>`)
+        .map(
+            (u) =>
+                `<option value="${escaparHtml(u.id)}">${escaparHtml(u.nombre_completo)} (${escaparHtml(
+                    u.rol,
+                )})</option>`,
+        )
         .join("");
 }
 
@@ -1017,8 +1073,8 @@ function renderizarUsuarioAdmin(usuario) {
     div.innerHTML = `
         <div class="ticket-encabezado">
             <div>
-                <div class="ticket-titulo">${usuario.nombre_completo}</div>
-                <div class="ticket-meta">${usuario.email}</div>
+                <div class="ticket-titulo">${escaparHtml(usuario.nombre_completo)}</div>
+                <div class="ticket-meta">${escaparHtml(usuario.email)}</div>
             </div>
             <span class="badge ${usuario.activo ? "badge-ACTIVO" : "badge-INACTIVO"}">
                 ${usuario.activo ? "Activo" : "Inactivo"}
@@ -1031,7 +1087,9 @@ function renderizarUsuarioAdmin(usuario) {
                     ${Object.entries(ETIQUETAS_ROL)
                         .map(
                             ([valor, etiqueta]) =>
-                                `<option value="${valor}" ${valor === usuario.rol ? "selected" : ""}>${etiqueta}</option>`,
+                                `<option value="${escaparHtml(valor)}" ${
+                                    valor === usuario.rol ? "selected" : ""
+                                }>${escaparHtml(etiqueta)}</option>`,
                         )
                         .join("")}
                 </select>
