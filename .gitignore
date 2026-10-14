@@ -20,3 +20,7 @@ Thumbs.db
 # Cobertura de tests
 .coverage
 htmlcov/
+
+# Soporte y contexto local de desarrollo / IA
+_soporte_desarrollo_local/
+.claude/
