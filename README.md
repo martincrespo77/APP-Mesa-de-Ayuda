@@ -102,6 +102,8 @@ desde el celular en la misma red sin nada adicional (ver
 ### 1. Clonar e instalar dependencias
 
 ```bash
+git clone https://github.com/martincrespo77/APP-Mesa-de-Ayuda.git
+cd APP-Mesa-de-Ayuda
 uv sync
 ```
 
@@ -126,6 +128,11 @@ cp .env.example .env
 
 `SECRET_KEY`, `MONGODB_URL` y `MONGODB_DB_NAME` son obligatorias: la app
 falla rápido al arrancar si no están definidas.
+
+El `.env` se usa al correr la API, el seed o el cliente desde el host (`uv
+run ...`); los valores de `.env.example` apuntan al MongoDB que expone
+Docker Compose en `localhost:27017`. El contenedor `api` no lee el `.env`:
+recibe sus variables desde `docker-compose.yml`.
 
 ### 3. Levantar el entorno con Docker (recomendado)
 
@@ -167,7 +174,7 @@ uv run uvicorn app.main:app --reload
 
 `scripts/seed_mongo.py` siembra datos de ejemplo directamente contra
 MongoDB usando las entidades de dominio y los repositorios reales (no pega
-a la API): 5 usuarios (uno por cada rol, los Solicitantes con
+a la API): 6 usuarios (al menos uno por cada rol, los Solicitantes con
 `servicios_suscriptos`) y 8 requerimientos (Incidentes y Solicitudes)
 cubriendo los distintos estados del ciclo de vida, más una relación de
 supervisión y una notificación de ejemplo. Es idempotente (usa ids
@@ -177,17 +184,20 @@ Con el backend/Mongo ya levantado (Docker o local):
 
 ```bash
 uv run python -m scripts.seed_mongo
+# o, dentro del contenedor de la API:
+docker compose exec api python -m scripts.seed_mongo
 ```
 
 Usuarios de ejemplo creados (contraseña `Seed1234!` para todos):
 
-| Email                              | Rol         |
-|------------------------------------|-------------|
-| `sofia.jefa@comunicarlos.com.ar`  | Supervisor  |
-| `rosa.molina@comunicarlos.com.ar` | Operador    |
-| `ivan.rios@comunicarlos.com.ar`   | Técnico     |
-| `lucia.gomez@comunicarlos.com`    | Solicitante |
-| `marcos.diaz@comunicarlos.com`    | Solicitante |
+| Email                               | Rol         |
+|-------------------------------------|-------------|
+| `sofia.jefa@comunicarlos.com.ar`   | Supervisor  |
+| `rosa.molina@comunicarlos.com.ar`  | Operador    |
+| `ivan.rios@comunicarlos.com.ar`    | Técnico     |
+| `marta.suarez@comunicarlos.com.ar` | Técnico (sin tickets; destino para probar la derivación) |
+| `lucia.gomez@comunicarlos.com`     | Solicitante |
+| `marcos.diaz@comunicarlos.com`     | Solicitante |
 
 Reglas de negocio validadas en el dominio (`Usuario`): Operador, Técnico y
 Supervisor exigen un email `@comunicarlos.com.ar` (el Solicitante puede usar
@@ -344,9 +354,30 @@ Bruno.
 > en vez de las variables originales, restaurarlo antes de commitear con
 > `git checkout -- bruno/environments/local.bru`.
 
-## Documentación de referencia
+## Matriz de roles y permisos
 
-La carpeta `CONTEXTO inicial/` contiene la especificación completa del
-proyecto (arquitectura, dominio, buenas prácticas), organizada en documentos
-cortos pensados para lectura progresiva por fase de trabajo — ver
-`CONTEXTO inicial/00_INDICE_Y_GUIA_DE_LECTURA.md` como punto de entrada.
+El dominio valida cada operación según el rol del actor (`RolUsuario`); la
+UI solo oculta lo que el backend rechazaría de todos modos.
+
+| Acción / Operación          | Solicitante       | Operador | Técnico         | Supervisor |
+|-----------------------------|:-----------------:|:--------:|:---------------:|:----------:|
+| Crear requerimiento propio  | ✅                | ✅       | ✅              | ✅         |
+| Ver todos los requerimientos| ❌ (solo propios) | ✅       | ✅              | ✅         |
+| Asignar técnico al ticket   | ❌                | ✅       | ❌              | ✅         |
+| Iniciar progreso del ticket | ❌                | ❌       | ✅ (si asignado)| ✅         |
+| Marcar como RESUELTO        | ❌                | ❌       | ✅ (si asignado)| ✅         |
+| Dar cierre de conformidad   | ✅ (propios)      | ✅       | ❌              | ✅         |
+| Cancelar / Desestimar       | ✅ (si ABIERTO)   | ✅       | ❌              | ✅         |
+| Agregar comentario          | ✅ (propios)      | ✅       | ✅ (si asignado)| ❌         |
+| Derivar a otro técnico      | ❌                | ❌       | ✅ (si asignado)| ❌         |
+| Administrar usuarios        | ❌                | ❌       | ❌              | ✅         |
+| Administrar supervisiones   | ❌                | ❌       | ❌              | ✅         |
+| Recibir notificaciones      | ❌                | ❌       | ❌              | ✅         |
+
+## Documentación de arquitectura
+
+Los diagramas oficiales viven en [`docs/diagramas/`](docs/diagramas/README.md)
+(clases, casos de uso, flujo y secuencia, en Mermaid `.mmd` y visores HTML).
+El punto de entrada es la suite unificada
+[`docs/diagramas/diagrama_suite_unificada.html`](docs/diagramas/diagrama_suite_unificada.html),
+que se abre directamente en el navegador.

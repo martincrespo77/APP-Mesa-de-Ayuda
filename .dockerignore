@@ -22,5 +22,7 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Documentación de cátedra: no hace falta dentro de la imagen
-CONTEXTO inicial/
+# Soporte y contexto local de desarrollo / IA: no hace falta dentro de la imagen
+_soporte_desarrollo_local/
+.claude/
+CLAUDE.md

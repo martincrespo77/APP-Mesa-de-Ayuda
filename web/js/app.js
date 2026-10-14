@@ -3,7 +3,7 @@
  * perfil del usuario actual, alta de Incidente/Solicitud filtrada por
  * servicios suscriptos, y un listado/detalle de requerimientos cuyas
  * pestañas, filtros y acciones se adaptan al rol según la Matriz de
- * Permisos de CLAUDE.md. Las funciones `puede*(ticket)` son la única
+ * Permisos del README. Las funciones `puede*(ticket)` son la única
  * fuente de verdad de qué botón mostrar; el backend vuelve a validar cada
  * transición de todos modos (Information Expert en las entidades de
  * dominio), así que ocultar un botón acá es una ayuda de UX, no el
@@ -107,7 +107,7 @@ let vistaTecnico = "mis-asignaciones";
 
 function filtrarSelectoresServicio() {
     // El backend no valida hoy el cruce servicio <-> servicios_suscriptos
-    // (ver PLAN_DESARROLLO_4_ROLES.md, Fase 1): esto es una restricción de
+    // (Fase 1, rol Solicitante): esto es una restricción de
     // UX para evitar tickets ilógicos, no una protección contra un 400.
     const suscriptos = usuarioActual?.servicios_suscriptos ?? [];
     if (suscriptos.length === 0) return;
@@ -486,7 +486,7 @@ const botonComentar = document.getElementById("boton-comentar");
 
 let ticketActualId = null;
 
-// -- Matriz de Permisos (CLAUDE.md) aplicada a botones del detalle --------------
+// -- Matriz de Permisos (README) aplicada a botones del detalle -----------------
 // Ocultar acá es solo UX: cada transición vuelve a validarse en el dominio.
 
 function esDueño(ticket) {

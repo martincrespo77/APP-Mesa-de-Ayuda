@@ -24,3 +24,7 @@ htmlcov/
 # Soporte y contexto local de desarrollo / IA
 _soporte_desarrollo_local/
 .claude/
+CLAUDE.md
+PLAN_DESARROLLO_4_ROLES.md
+CONTEXTO inicial/
+docs/planes/
