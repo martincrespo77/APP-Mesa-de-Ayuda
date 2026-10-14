@@ -1,0 +1,142 @@
+%% =====================================================================
+%% Mesa de Ayuda Comunicarlos — Diagrama de Casos de Uso del Sistema
+%% Modelado UML con Actores, Casos de Uso, Inclusiones <<include>> y Extensiones <<extend>>
+%% Compilado para visor interactivo autónomo MCP mcp-diagrama-iterativo-mermaid
+%% =====================================================================
+graph LR
+
+    %% Actores del Sistema
+    subgraph sg_actores["ACTORES DEL SISTEMA"]
+        act_solicitante(["👤 Solicitante<br/>(Cliente / Socio Cooperativa)"])
+        act_operador(["👤 Operador<br/>(Mesa de Ayuda / Nivel 1)"])
+        act_tecnico(["👤 Técnico<br/>(Soporte Especialista / Nivel 2)"])
+        act_supervisor(["👤 Supervisor<br/>(Gestión, Calidad y Administración)"])
+    end
+
+    %% Límite del Sistema
+    subgraph sg_sistema["🏢 SISTEMA MESA DE AYUDA (COOPERATIVA COMUNICARLOS)"]
+
+        subgraph sg_cu_comun["Módulo Acceso y Autenticación"]
+            cu_login(["CU01: Iniciar Sesión (OAuth2 JWT)"])
+            cu_registro(["CU02: Registrarse como Solicitante"])
+            cu_perfil(["CU03: Consultar Perfil y Servicios"])
+        end
+
+        subgraph sg_cu_solicitante["Casos de Uso de Solicitante"]
+            cu_crear_incidente(["CU04: Reportar Incidente de Servicio"])
+            cu_crear_solicitud(["CU05: Registrar Solicitud de Trámite"])
+            cu_ver_propios(["CU06: Consultar Mis Requerimientos"])
+            cu_comentar_propio(["CU07: Agregar Comentario a Ticket Propio"])
+            cu_cerrar_conforme(["CU08: Dar Cierre de Conformidad"])
+            cu_cancelar_abierto(["CU09: Cancelar Ticket Propio (si ABIERTO)"])
+        end
+
+        subgraph sg_cu_operador["Casos de Uso de Operador (Triage)"]
+            cu_bandeja_general(["CU10: Explorar Bandeja General de Tickets"])
+            cu_iniciar_analisis(["CU11: Iniciar Análisis de Requerimiento"])
+            cu_asignar_tecnico(["CU12: Asignar Técnico Especialista"])
+            cu_comentar_operador(["CU13: Agregar Comentario Operativo"])
+            cu_cancelar_operador(["CU14: Cancelar / Desestimar Requerimiento"])
+            cu_cerrar_operador(["CU15: Cerrar Requerimiento Administrativo"])
+        end
+
+        subgraph sg_cu_tecnico["Casos de Uso de Técnico (Resolución)"]
+            cu_mis_asignaciones(["CU16: Gestionar Bandeja 'Mis Asignaciones'"])
+            cu_iniciar_progreso(["CU17: Iniciar Progreso de Atención"])
+            cu_derivar_tecnico(["CU18: Derivar Ticket / Interconsulta"])
+            cu_resolver_ticket(["CU19: Resolver Ticket con Nota Descriptiva"])
+            cu_comentar_tecnico(["CU20: Comentar Ticket Asignado"])
+        end
+
+        subgraph sg_cu_supervisor["Casos de Uso de Supervisor (Gestión y Control)"]
+            cu_panel_metricas(["CU21: Visualizar Tablero de Métricas y KPIs"])
+            cu_ver_notif(["CU22: Consultar Notificaciones en Tiempo Real"])
+            cu_marcar_leida(["CU23: Marcar Notificación como Leída"])
+            cu_crear_usuario(["CU24: Alta de Empleados y Definición de Roles"])
+            cu_gestionar_usuarios(["CU25: Administrar Usuarios y Modificar Rol"])
+            cu_activar_desactivar(["CU26: Activar / Desactivar Cuentas"])
+            cu_admin_supervision(["CU27: Asignar y Remover Empleados Supervisados"])
+            cu_intervencion_global(["CU28: Intervención Global (Reasignar / Cerrar)"])
+        end
+
+        subgraph sg_reglas_negocio["Reglas de Inclusión y Extensión del Negocio"]
+            cu_validar_suscripcion(["«include» Validar Servicios Suscriptos"])
+            cu_validar_nota(["«include» Validar Nota de Resolución Descriptiva"])
+            cu_reapertura_auto(["«extend» Reapertura Automática a EN_PROGRESO"])
+            cu_despachar_notif(["«include» Despachar Evento y Notificar Supervisores"])
+        end
+
+    end
+
+    %% Asociaciones de Actor Solicitante
+    act_solicitante --- cu_login
+    act_solicitante --- cu_registro
+    act_solicitante --- cu_perfil
+    act_solicitante --- cu_crear_incidente
+    act_solicitante --- cu_crear_solicitud
+    act_solicitante --- cu_ver_propios
+    act_solicitante --- cu_comentar_propio
+    act_solicitante --- cu_cerrar_conforme
+    act_solicitante --- cu_cancelar_abierto
+
+    %% Asociaciones de Actor Operador
+    act_operador --- cu_login
+    act_operador --- cu_perfil
+    act_operador --- cu_bandeja_general
+    act_operador --- cu_iniciar_analisis
+    act_operador --- cu_asignar_tecnico
+    act_operador --- cu_comentar_operador
+    act_operador --- cu_cancelar_operador
+    act_operador --- cu_cerrar_operador
+
+    %% Asociaciones de Actor Técnico
+    act_tecnico --- cu_login
+    act_tecnico --- cu_perfil
+    act_tecnico --- cu_mis_asignaciones
+    act_tecnico --- cu_iniciar_progreso
+    act_tecnico --- cu_derivar_tecnico
+    act_tecnico --- cu_resolver_ticket
+    act_tecnico --- cu_comentar_tecnico
+
+    %% Asociaciones de Actor Supervisor
+    act_supervisor --- cu_login
+    act_supervisor --- cu_perfil
+    act_supervisor --- cu_panel_metricas
+    act_supervisor --- cu_ver_notif
+    act_supervisor --- cu_marcar_leida
+    act_supervisor --- cu_crear_usuario
+    act_supervisor --- cu_gestionar_usuarios
+    act_supervisor --- cu_activar_desactivar
+    act_supervisor --- cu_admin_supervision
+    act_supervisor --- cu_intervencion_global
+
+    %% Relaciones <<include>>
+    cu_crear_incidente -.->|"<<include>>"| cu_validar_suscripcion
+    cu_crear_solicitud -.->|"<<include>>"| cu_validar_suscripcion
+    cu_resolver_ticket -.->|"<<include>>"| cu_validar_nota
+    cu_iniciar_analisis -.->|"<<include>>"| cu_despachar_notif
+    cu_asignar_tecnico -.->|"<<include>>"| cu_despachar_notif
+    cu_iniciar_progreso -.->|"<<include>>"| cu_despachar_notif
+    cu_derivar_tecnico -.->|"<<include>>"| cu_despachar_notif
+    cu_resolver_ticket -.->|"<<include>>"| cu_despachar_notif
+
+    %% Relaciones <<extend>>
+    cu_reapertura_auto -.->|"<<extend>> si ticket está RESUELTO"| cu_comentar_operador
+    cu_reapertura_auto -.->|"<<extend>> si ticket está RESUELTO"| cu_comentar_tecnico
+
+    %% Estilos de Nodos
+    classDef actorClase fill:#03071e,stroke:#f72585,stroke-width:2px,color:#ffffff
+    classDef cuComun fill:#14213d,stroke:#fca311,stroke-width:2px,color:#ffffff
+    classDef cuSolicitante fill:#132a45,stroke:#4cc9f0,stroke-width:2px,color:#ffffff
+    classDef cuOperador fill:#3a200a,stroke:#f77f00,stroke-width:2px,color:#ffffff
+    classDef cuTecnico fill:#103728,stroke:#2ec4b6,stroke-width:2px,color:#ffffff
+    classDef cuSupervisor fill:#4a121a,stroke:#e63946,stroke-width:2px,color:#ffffff
+    classDef cuRegla fill:#2b2d42,stroke:#8d99ae,stroke-width:2px,color:#ffffff
+
+    class act_solicitante,act_operador,act_tecnico,act_supervisor actorClase
+    class cu_login,cu_registro,cu_perfil cuComun
+    class cu_crear_incidente,cu_crear_solicitud,cu_ver_propios,cu_comentar_propio,cu_cerrar_conforme,cu_cancelar_abierto cuSolicitante
+    class cu_bandeja_general,cu_iniciar_analisis,cu_asignar_tecnico,cu_comentar_operador,cu_cancelar_operador,cu_cerrar_operador cuOperador
+    class cu_mis_asignaciones,cu_iniciar_progreso,cu_derivar_tecnico,cu_resolver_ticket,cu_comentar_tecnico cuTecnico
+    class cu_panel_metricas,cu_ver_notif,cu_marcar_leida,cu_crear_usuario,cu_gestionar_usuarios,cu_activar_desactivar,cu_admin_supervision,cu_intervencion_global cuSupervisor
+    class cu_validar_suscripcion,cu_validar_nota,cu_reapertura_auto,cu_despachar_notif cuRegla

@@ -1,0 +1,70 @@
+sequenceDiagram
+    autonumber
+    actor Cliente as 👤 Solicitante / Web UI
+    participant Router as 🌐 Router FastAPI (/requerimientos)
+    participant Auth as 🛡️ Auth & Deps (JWT)
+    participant Servicio as ⚙️ ServicioRequerimientos
+    participant Fabrica as 🏭 FabricaRequerimientos
+    participant Dominio as 📦 Requerimiento (Entidad)
+    participant Repo as 🗄️ RepositorioRequerimientos
+    participant Mongo as 🍃 MongoDB (Colección)
+    participant Despachador as 📢 DespachadorEventos
+    participant ObsMongo as 👁️ ObservadorNotificaciones
+    actor Supervisor as 👤 Supervisor (Notificado)
+
+    %% Escenario 1: Creación de Requerimiento
+    rect rgb(240, 248, 255)
+        note over Cliente, Supervisor: ESCENARIO 1: Creación de Requerimiento (Alta e Invariantes)
+        Cliente->>+Router: POST /requerimientos (Payload JSON + Bearer Token)
+        Router->>+Auth: get_current_user_activo(token)
+        Auth-->>-Router: Usuario autenticado (Rol: SOLICITANTE)
+        Router->>+Servicio: crear(tipo, **atributos)
+        Servicio->>+Fabrica: crear(tipo, **atributos)
+        Fabrica->>+Dominio: __init__(...) valida suscripción y estado inicial ABIERTO
+        Dominio-->>-Fabrica: Instancia Requerimiento + Evento CREACION
+        Fabrica-->>-Servicio: Instancia Requerimiento
+        Servicio->>+Repo: guardar(requerimiento)
+        Repo->>+Mongo: replace_one(filter={"id": req.id}, doc, upsert=True)
+        Mongo-->>-Repo: Acknowledged
+        Repo-->>-Servicio: Confirmado
+        Servicio->>+Despachador: notificar(evento_creacion)
+        Despachador->>ObsMongo: actualizar(evento)
+        note over ObsMongo: Solicitante no es supervisable; no genera alerta
+        Despachador-->>-Servicio: Eventos despachados
+        Servicio-->>-Router: Requerimiento creado
+        Router-->>-Cliente: HTTP 201 Created (RequerimientoResponse)
+    end
+
+    %% Escenario 2: Asignación y Resolución Técnica
+    rect rgb(255, 245, 245)
+        note over Cliente, Supervisor: ESCENARIO 2: Resolución Técnica por Técnico Asignado
+        actor Tecnico as 🔧 Técnico Asignado
+        Tecnico->>+Router: POST /requerimientos/{id}/resolver (nota_resolucion)
+        Router->>+Auth: get_current_user_activo(token) + requerir_rol(TECNICO)
+        Auth-->>-Router: Usuario autenticado (Rol: TECNICO)
+        Router->>+Servicio: resolver(req_id, nota, autor_id, rol)
+        Servicio->>+Repo: buscar_por_id(req_id)
+        Repo->>+Mongo: find_one({"id": req_id})
+        Mongo-->>-Repo: Documento encontrado
+        Repo-->>-Servicio: Requerimiento reconstituido
+        Servicio->>+Dominio: resolver(nota_resolucion, autor_id, rol)
+        Dominio->>Dominio: Validar estado actual == EN_PROGRESO
+        Dominio->>Dominio: Validar autor_id == tecnico_asignado_id
+        Dominio->>Dominio: Validar longitud nota_resolucion
+        Dominio->>Dominio: estado = RESUELTO + registrar Evento RESOLUCION
+        Dominio-->>-Servicio: EventoRequerimiento(RESOLUCION)
+        Servicio->>+Repo: guardar(requerimiento)
+        Repo->>+Mongo: replace_one(filter={"id": req.id}, doc_actualizado)
+        Mongo-->>-Repo: Acknowledged
+        Repo-->>-Servicio: Guardado confirmado
+        Servicio->>+Despachador: notificar(evento_resolucion)
+        Despachador->>+ObsMongo: actualizar(evento_resolucion)
+        ObsMongo->>ObsMongo: Detecta autor TECNICO (Rol supervisable)
+        ObsMongo->>Mongo: Buscar supervisores del técnico en 'supervision'
+        ObsMongo->>Mongo: insert_one('notificaciones', Notificacion(leida=False))
+        ObsMongo-->>-Despachador: Notificaciones guardadas
+        Despachador-->>-Servicio: Notificación completada
+        Servicio-->>-Router: Requerimiento en estado RESUELTO
+        Router-->>-Tecnico: HTTP 200 OK (RequerimientoResponse)
+        Mongo-->>Supervisor: Notificación push / Polling en tiempo real
+    end

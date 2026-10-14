@@ -1,0 +1,125 @@
+%% =====================================================================
+%% Mesa de Ayuda Comunicarlos — Diagrama de Clases Completo y Arquitectura
+%% Entidades de Dominio, Fábrica, Servicios de Aplicación, Puertos y Adaptadores
+%% Generado para compilador interactivo MCP mcp-diagrama-iterativo-mermaid
+%% =====================================================================
+graph TD
+
+    subgraph sg_dominio["DOMINIO — Jerarquía Polimórfica de Requerimientos"]
+        cls_requerimiento["«abstract» Requerimiento<br/>app/requerimientos/dominio/base.py<br/>--- atributos ---<br/>+id: UUID<br/>+titulo: str<br/>+descripcion: str<br/>+solicitante_id: UUID<br/>+estado: EstadoRequerimiento<br/>+fecha_creacion: datetime<br/>+tecnico_asignado_id: UUID | None<br/>+nota_resolucion: str | None<br/>-_historial: list[EventoRequerimiento]<br/>-_comentarios: list[Comentario]<br/>+historial: list[EventoRequerimiento]<br/>+comentarios: list[Comentario]<br/>+tipo: TipoRequerimiento (abstract)<br/>--- métodos ---<br/>+iniciar_analisis(autor_id, rol_actor)<br/>+asignar_tecnico(tecnico_id, autor_id, rol_actor)<br/>+iniciar_progreso(autor_id, rol_actor)<br/>+resolver(nota_resolucion, autor_id, rol_actor)<br/>+cerrar(autor_id, rol_actor)<br/>+cancelar(autor_id, rol_actor)<br/>+agregar_comentario(texto, autor_id, rol_actor)<br/>+derivar_interconsulta(tecnico_destino_id, autor_id, rol_actor)"]
+        cls_incidente["Incidente (extiende Requerimiento)<br/>app/requerimientos/dominio/incidente.py<br/>--- atributos ---<br/>+urgencia: UrgenciaIncidente<br/>+categoria: CategoriaIncidente<br/>+servicio: ServicioComunicarlos<br/>+pasos_reproduccion: str<br/>+tipo: TipoRequerimiento = INCIDENTE<br/>--- métodos ---<br/>+reconstruir(...)"]
+        cls_solicitud["Solicitud (extiende Requerimiento)<br/>app/requerimientos/dominio/solicitud.py<br/>--- atributos ---<br/>+categoria: CategoriaSolicitud<br/>+servicio: ServicioComunicarlos<br/>+tipo: TipoRequerimiento = SOLICITUD<br/>--- métodos ---<br/>+reconstruir(...)"]
+        cls_comentario["«value object» Comentario<br/>app/requerimientos/dominio/comentario.py<br/>+id: UUID<br/>+requerimiento_id: UUID<br/>+autor_id: UUID<br/>+texto: str<br/>+timestamp: datetime"]
+        cls_evento["«value object» EventoRequerimiento<br/>app/requerimientos/eventos.py<br/>+id: UUID<br/>+requerimiento_id: UUID<br/>+tipo_evento: TipoEventoRequerimiento<br/>+autor_id: UUID<br/>+detalle: str<br/>+timestamp: datetime"]
+        cls_fabrica["«factory» FabricaRequerimientos<br/>app/requerimientos/fabrica.py<br/>-_catalogo: dict[TipoRequerimiento, type]<br/>--- métodos ---<br/>+crear(tipo, **atributos)<br/>+reconstruir(tipo, **atributos)<br/>+registrar_tipo(tipo, clase)"]
+    end
+
+    subgraph sg_usuarios["DOMINIO — Usuarios y Supervisión"]
+        cls_usuario["Usuario (Aggregate Root)<br/>app/usuarios/dominio.py<br/>--- atributos ---<br/>+id: UUID<br/>+nombre_completo: str<br/>+email: str<br/>-_rol: RolUsuario<br/>-_password_hash: str<br/>-_activo: bool<br/>-_servicios_suscriptos: frozenset[ServicioComunicarlos]<br/>-_fecha_creacion: datetime<br/>-_ultimo_acceso: datetime | None<br/>--- métodos ---<br/>+registrar_acceso()<br/>+activar()<br/>+desactivar()<br/>+cambiar_rol(nuevo_rol)<br/>+cambiar_password_hash(hash)"]
+        cls_relacion_supervision["RelacionSupervision<br/>app/supervision/dominio.py<br/>+id: UUID<br/>+supervisor_id: UUID<br/>+supervisado_id: UUID<br/>+fecha_asignacion: datetime"]
+        cls_notificacion["Notificacion<br/>app/notificaciones/dominio.py<br/>+id: UUID<br/>+supervisor_id: UUID<br/>+empleado_supervisado_id: UUID<br/>+requerimiento_id: UUID<br/>+tipo_evento: TipoEventoRequerimiento<br/>+detalle: str<br/>-_leida: bool<br/>+timestamp: datetime<br/>+marcar_leida()"]
+    end
+
+    subgraph sg_aplicacion["SERVICIOS DE APLICACIÓN (Casos de Uso)"]
+        cls_srv_req["ServicioRequerimientos<br/>app/requerimientos/servicios.py<br/>+crear(tipo, **atributos)<br/>+obtener_por_id(id)<br/>+obtener_visible_para(id, rol, solicitante_id)<br/>+listar_visibles_para(rol, solicitante_id)<br/>+iniciar_analisis(id, autor_id, rol)<br/>+asignar_tecnico(id, tecnico_id, autor_id, rol)<br/>+iniciar_progreso(id, autor_id, rol)<br/>+resolver(id, nota, autor_id, rol)<br/>+cerrar(id, autor_id, rol)<br/>+cancelar(id, autor_id, rol)<br/>+agregar_comentario(id, texto, autor_id, rol)<br/>+derivar_interconsulta(id, tecnico_dest_id, autor, rol)"]
+        cls_srv_usr["ServicioUsuarios<br/>app/usuarios/servicios.py<br/>+autenticar(email, password)<br/>+registrar_solicitante(...)<br/>+crear_usuario(...)<br/>+obtener_por_id(id)<br/>+cambiar_rol(id, rol)<br/>+activar(id)<br/>+desactivar(id)<br/>+listar_tecnicos()"]
+        cls_srv_sup["ServicioSupervision<br/>app/supervision/servicios.py<br/>+asignar_supervisado(supervisor_id, supervisado_id)<br/>+remover_supervisado(supervisor_id, supervisado_id)<br/>+listar_supervisados_de(supervisor_id)<br/>+listar_supervisores_de(supervisado_id)"]
+        cls_srv_notif["ServicioNotificaciones<br/>app/notificaciones/servicios.py<br/>+listar_por_supervisor(supervisor_id)<br/>+marcar_leida(notificacion_id, supervisor_id)"]
+    end
+
+    subgraph sg_puertos["PUERTOS / INTERFACES (Dependency Inversion)"]
+        cls_puerto_repo_req["«interface» RepositorioRequerimientos<br/>app/requerimientos/repositorio.py<br/>+guardar(req)<br/>+buscar_por_id(id)<br/>+listar_todos()<br/>+listar_por_solicitante(id)"]
+        cls_puerto_repo_usr["«interface» RepositorioUsuarios<br/>app/usuarios/repositorio.py<br/>+guardar(usuario)<br/>+buscar_por_id(id)<br/>+buscar_por_email(email)<br/>+listar_todos()"]
+        cls_puerto_repo_sup["«interface» RepositorioSupervision<br/>app/supervision/repositorio.py<br/>+asignar(relacion)<br/>+remover(supervisor_id, supervisado_id)<br/>+existe(supervisor_id, supervisado_id)<br/>+listar_supervisados_de(supervisor_id)<br/>+listar_supervisores_de(supervisado_id)"]
+        cls_puerto_repo_notif["«interface» RepositorioNotificaciones<br/>app/notificaciones/repositorio.py<br/>+guardar(notif)<br/>+buscar_por_id(id)<br/>+listar_por_supervisor(supervisor_id)"]
+        cls_puerto_obs["«interface» ObservadorRequerimiento<br/>app/notificaciones/observador.py<br/>+actualizar(evento: EventoRequerimiento)"]
+    end
+
+    subgraph sg_infraestructura["INFRAESTRUCTURA Y EVENTOS (Adaptadores Concretos)"]
+        cls_repo_req_mongo["RepositorioRequerimientosMongo<br/>app/infraestructura/repo_requerimientos.py<br/>MongoDB colección 'requerimientos'"]
+        cls_repo_usr_mongo["RepositorioUsuariosMongo<br/>app/infraestructura/repo_usuarios.py<br/>MongoDB colección 'usuarios'"]
+        cls_repo_sup_mongo["RepositorioSupervisionMongo<br/>app/infraestructura/repo_supervision.py<br/>MongoDB colección 'supervision'"]
+        cls_repo_notif_mongo["RepositorioNotificacionesMongo<br/>app/infraestructura/repo_notificaciones.py<br/>MongoDB colección 'notificaciones'"]
+        cls_despachador["DespachadorEventos (Observable)<br/>app/notificaciones/despachador.py<br/>-_observadores: list[ObservadorRequerimiento]<br/>+suscribir(obs)<br/>+desuscribir(obs)<br/>+notificar(evento)"]
+        cls_obs_mongo["ObservadorNotificacionesMongo<br/>app/infraestructura/observador_notificaciones.py<br/>+actualizar(evento)"]
+        cls_obs_logger["ObservadorLogger<br/>app/notificaciones/observador_logger.py<br/>+actualizar(evento)"]
+    end
+
+    subgraph sg_enums["ENUMERACIONES DEL SISTEMA"]
+        enum_rol["«enum» RolUsuario<br/>SOLICITANTE<br/>OPERADOR<br/>TECNICO<br/>SUPERVISOR"]
+        enum_servicio["«enum» ServicioComunicarlos<br/>TELEFONIA_CELULAR<br/>INTERNET_BANDA_ANCHA<br/>TELEVISION"]
+        enum_estado["«enum» EstadoRequerimiento<br/>ABIERTO<br/>EN_ANALISIS<br/>EN_PROGRESO<br/>RESUELTO<br/>CERRADO<br/>CANCELADO"]
+        enum_tipo_req["«enum» TipoRequerimiento<br/>INCIDENTE<br/>SOLICITUD"]
+        enum_urgencia["«enum» UrgenciaIncidente<br/>CRITICO<br/>IMPORTANTE<br/>MENOR"]
+        enum_cat_inc["«enum» CategoriaIncidente<br/>SERVICIO_INACCESIBLE<br/>BLOQUEO_SIM<br/>PERDIDA_O_DESTRUCCION_DE_EQUIPO"]
+        enum_cat_sol["«enum» CategoriaSolicitud<br/>ALTA_SERVICIO<br/>BAJA_SERVICIO"]
+        enum_tipo_evt["«enum» TipoEventoRequerimiento<br/>CREACION, CAMBIO_ESTADO<br/>ASIGNACION, RESOLUCION<br/>CIERRE, CANCELACION<br/>COMENTARIO, DERIVACION<br/>REAPERTURA"]
+    end
+
+    %% Relaciones de Herencia de Entidades
+    cls_incidente ==>|"hereda de"| cls_requerimiento
+    cls_solicitud ==>|"hereda de"| cls_requerimiento
+
+    %% Relaciones de Composición en Requerimiento
+    cls_requerimiento ==>|"1 compone 0..*"| cls_comentario
+    cls_requerimiento ==>|"1 compone 1..*"| cls_evento
+
+    %% Fábrica
+    cls_fabrica -.->|"instancia polimórficamente"| cls_incidente
+    cls_fabrica -.->|"instancia polimórficamente"| cls_solicitud
+
+    %% Servicios de Aplicación orquestan Dominio y Persistencia
+    cls_srv_req -->|"utiliza fábrica"| cls_fabrica
+    cls_srv_req -->|"invoca transiciones"| cls_requerimiento
+    cls_srv_req -->|"inversión dep."| cls_puerto_repo_req
+    cls_srv_req -->|"valida técnicos con"| cls_puerto_repo_usr
+    cls_srv_req -->|"despacha eventos"| cls_despachador
+
+    cls_srv_usr -->|"gestiona entidad"| cls_usuario
+    cls_srv_usr -->|"inversión dep."| cls_puerto_repo_usr
+
+    cls_srv_sup -->|"gestiona asociación"| cls_relacion_supervision
+    cls_srv_sup -->|"inversión dep."| cls_puerto_repo_sup
+
+    cls_srv_notif -->|"gestiona"| cls_notificacion
+    cls_srv_notif -->|"inversión dep."| cls_puerto_repo_notif
+
+    %% Implementación de Puertos por Adaptadores Mongo
+    cls_repo_req_mongo -.->|"implementa puerto"| cls_puerto_repo_req
+    cls_repo_usr_mongo -.->|"implementa puerto"| cls_puerto_repo_usr
+    cls_repo_sup_mongo -.->|"implementa puerto"| cls_puerto_repo_sup
+    cls_repo_notif_mongo -.->|"implementa puerto"| cls_puerto_repo_notif
+
+    %% Patrón Observer
+    cls_despachador -->|"notifica a"| cls_puerto_obs
+    cls_obs_mongo -.->|"implementa"| cls_puerto_obs
+    cls_obs_logger -.->|"implementa"| cls_puerto_obs
+    cls_obs_mongo -->|"consulta supervisores"| cls_puerto_repo_sup
+    cls_obs_mongo -->|"crea y persiste notificaciones"| cls_puerto_repo_notif
+
+    %% Enums
+    cls_requerimiento -->|"estado"| enum_estado
+    cls_requerimiento -->|"discriminador"| enum_tipo_req
+    cls_incidente -->|"urgencia"| enum_urgencia
+    cls_incidente -->|"categoria"| enum_cat_inc
+    cls_incidente -->|"servicio"| enum_servicio
+    cls_solicitud -->|"categoria"| enum_cat_sol
+    cls_solicitud -->|"servicio"| enum_servicio
+    cls_usuario -->|"rol"| enum_rol
+    cls_usuario -->|"servicios"| enum_servicio
+    cls_evento -->|"tipo"| enum_tipo_evt
+
+    %% Estilos de Capas
+    classDef capaDominio fill:#2d1b4e,stroke:#9b5de5,stroke-width:2px,color:#f8f9fa
+    classDef capaUsuarios fill:#1b3a4b,stroke:#00b4d8,stroke-width:2px,color:#f8f9fa
+    classDef capaAplicacion fill:#0f382c,stroke:#2ec4b6,stroke-width:2px,color:#f8f9fa
+    classDef capaPuertos fill:#3a2e12,stroke:#ffb703,stroke-width:2px,color:#f8f9fa
+    classDef capaInfra fill:#441424,stroke:#e63946,stroke-width:2px,color:#f8f9fa
+    classDef capaEnums fill:#1f2937,stroke:#6c757d,stroke-width:2px,color:#e5e7eb
+
+    class cls_requerimiento,cls_incidente,cls_solicitud,cls_comentario,cls_evento,cls_fabrica capaDominio
+    class cls_usuario,cls_relacion_supervision,cls_notificacion capaUsuarios
+    class cls_srv_req,cls_srv_usr,cls_srv_sup,cls_srv_notif capaAplicacion
+    class cls_puerto_repo_req,cls_puerto_repo_usr,cls_puerto_repo_sup,cls_puerto_repo_notif,cls_puerto_obs capaPuertos
+    class cls_repo_req_mongo,cls_repo_usr_mongo,cls_repo_sup_mongo,cls_repo_notif_mongo,cls_despachador,cls_obs_mongo,cls_obs_logger capaInfra
+    class enum_rol,enum_servicio,enum_estado,enum_tipo_req,enum_urgencia,enum_cat_inc,enum_cat_sol,enum_tipo_evt capaEnums

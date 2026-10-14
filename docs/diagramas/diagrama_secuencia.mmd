@@ -1,0 +1,93 @@
+%% =====================================================================
+%% Mesa de Ayuda Comunicarlos — Diagrama de Secuencia e Interacción Multicapa
+%% Flujo secuencial de ejecución: Cliente -> API -> Auth -> Servicio -> Dominio -> Mongo -> Observer
+%% Compilado para visor interactivo autónomo MCP mcp-diagrama-iterativo-mermaid
+%% =====================================================================
+graph TD
+
+    subgraph sg_cliente["1. CAPA CLIENTE (Web / Desktop)"]
+        cli_req["(1) Solicitante envía formulario<br/>POST /requerimientos<br/>Payload JSON + Token Bearer"]
+        cli_res_ok["(10) Recibe HTTP 201 Created<br/>RequerimientoResponse con UUID"]
+        cli_op_res["(11) Técnico envía resolución<br/>POST /requerimientos/{id}/resolver<br/>Nota obligatoria + Token Bearer"]
+        cli_res_resuelto["(20) Recibe HTTP 200 OK<br/>Ticket en estado RESUELTO"]
+    end
+
+    subgraph sg_api["2. CAPA API & SEGURIDAD (FastAPI / Auth)"]
+        api_router_crear["(2) app.requerimientos.router: crear_requerimiento"]
+        api_auth_guard["(3) app.deps: get_current_user_activo<br/>• Decodifica JWT (python-jose)<br/>• Valida expiración y firma<br/>• Inyecta Usuario autenticado"]
+        api_router_resolver["(12) app.requerimientos.router: resolver_requerimiento"]
+        api_role_guard["(13) app.deps: requerir_rol(TECNICO, SUPERVISOR)<br/>• Verifica rol del actor<br/>• Verifica asignación o supervisión"]
+    end
+
+    subgraph sg_servicio["3. CAPA SERVICIOS DE APLICACIÓN (Orquestación)"]
+        srv_crear["(4) ServicioRequerimientos.crear(...)<br/>Coordina fábrica, persistencia y eventos"]
+        srv_resolver["(14) ServicioRequerimientos.resolver(...)<br/>Busca ticket y delega transición a la entidad"]
+    end
+
+    subgraph sg_dominio["4. CAPA DOMINIO (Information Expert & Factory)"]
+        dom_fabrica["(5) FabricaRequerimientos.crear(tipo, ...)<br/>• Instancia Incidente o Solicitud<br/>• Valida contrato y suscripción<br/>• Estado inicial: ABIERTO"]
+        dom_evento_creacion["(6) Registra EventoRequerimiento(CREACION)<br/>en historial embebido de la entidad"]
+        dom_entidad_resolver["(15) Requerimiento.resolver(nota, autor, rol)<br/>• Valida estado actual == EN_PROGRESO<br/>• Valida autor == tecnico_asignado o supervisor<br/>• Valida longitud de nota_resolucion<br/>• Cambia estado a RESUELTO"]
+        dom_evento_resolucion["(16) Registra EventoRequerimiento(RESOLUCION)<br/>en historial embebido de la entidad"]
+    end
+
+    subgraph sg_infra["5. CAPA PERSISTENCIA (MongoDB PyMongo)"]
+        repo_guardar_crear["(7) RepositorioRequerimientosMongo.guardar(req)"]
+        db_insert["(8) pymongo: db.requerimientos.replace_one(upsert=True)<br/>Persistencia atómica del documento con historial"]
+        repo_guardar_resolver["(17) RepositorioRequerimientosMongo.guardar(req)"]
+        db_update["(18) pymongo: actualiza estado a RESUELTO<br/>y persiste nota de resolución e historial"]
+    end
+
+    subgraph sg_eventos["6. CAPA EVENTOS & OBSERVADORES (Observer Pattern)"]
+        despachador_crear["(9) DespachadorEventos.notificar(evento_creacion)<br/>• ObservadorLogger loggea auditoría<br/>• Solicitante no es supervisable"]
+        despachador_resolver["(19) DespachadorEventos.notificar(evento_resolucion)<br/>• ObservadorLogger registra resolución"]
+        obs_mongo["(19b) ObservadorNotificacionesMongo.actualizar(evento)<br/>• Detecta que autor es TECNICO (supervisable)<br/>• RepositorioSupervision.listar_supervisores_de(autor_id)<br/>• Crea Notificacion para cada supervisor a cargo"]
+        db_notif_insert["(19c) db.notificaciones.insert_one(notificacion)<br/>Queda lista para visualización en tiempo real"]
+    end
+
+    %% Secuencia Escenario 1: Creación de Requerimiento
+    cli_req -->|"HTTP POST /requerimientos"| api_router_crear
+    api_router_crear -->|"Valida token"| api_auth_guard
+    api_auth_guard -->|"Inyecta actor"| api_router_crear
+    api_router_crear -->|"Invoca caso de uso"| srv_crear
+    srv_crear -->|"Solicita instancia"| dom_fabrica
+    dom_fabrica -->|"Genera evento inicial"| dom_evento_creacion
+    dom_evento_creacion -->|"Retorna entidad Requerimiento"| srv_crear
+    srv_crear -->|"Persistir entidad"| repo_guardar_crear
+    repo_guardar_crear -->|"Operación PyMongo"| db_insert
+    db_insert -->|"Confirmado"| srv_crear
+    srv_crear -->|"Despachar evento"| despachador_crear
+    srv_crear -->|"Retorna a Router"| api_router_crear
+    api_router_crear -->|"Respuesta HTTP 201"| cli_res_ok
+
+    %% Secuencia Escenario 2: Resolución Técnica por Técnico Asignado
+    cli_op_res -->|"HTTP POST /requerimientos/{id}/resolver"| api_router_resolver
+    api_router_resolver -->|"Valida permisos y rol"| api_role_guard
+    api_role_guard -->|"Permiso concedido"| api_router_resolver
+    api_router_resolver -->|"Invoca resolver"| srv_resolver
+    srv_resolver -->|"Aplica método de dominio"| dom_entidad_resolver
+    dom_entidad_resolver -->|"Agrega evento resolución"| dom_evento_resolucion
+    dom_evento_resolucion -->|"Retorna entidad actualizada"| srv_resolver
+    srv_resolver -->|"Persistir nuevo estado"| repo_guardar_resolver
+    repo_guardar_resolver -->|"Operación PyMongo"| db_update
+    db_update -->|"Confirmado"| srv_resolver
+    srv_resolver -->|"Despachar evento"| despachador_resolver
+    despachador_resolver -->|"Notifica observador"| obs_mongo
+    obs_mongo -->|"Inserta alerta supervisor"| db_notif_insert
+    srv_resolver -->|"Retorna a Router"| api_router_resolver
+    api_router_resolver -->|"Respuesta HTTP 200"| cli_res_resuelto
+
+    %% Estilos por Capa
+    classDef capaCli fill:#1e3a5f,stroke:#4a90d9,stroke-width:2px,color:#eaf2fb
+    classDef capaApi fill:#0f3d2e,stroke:#3fbf8f,stroke-width:2px,color:#e8fbf4
+    classDef capaSrv fill:#123a4d,stroke:#39a8d0,stroke-width:2px,color:#e7f7fd
+    classDef capaDom fill:#3d2a5c,stroke:#a179e0,stroke-width:2px,color:#f3ecff
+    classDef capaInfra fill:#4a1f2b,stroke:#d9647f,stroke-width:2px,color:#fdeaef
+    classDef capaEvt fill:#553d0a,stroke:#e0b73f,stroke-width:2px,color:#fff8e1
+
+    class cli_req,cli_res_ok,cli_op_res,cli_res_resuelto capaCli
+    class api_router_crear,api_auth_guard,api_router_resolver,api_role_guard capaApi
+    class srv_crear,srv_resolver capaSrv
+    class dom_fabrica,dom_evento_creacion,dom_entidad_resolver,dom_evento_resolucion capaDom
+    class repo_guardar_crear,db_insert,repo_guardar_resolver,db_update capaInfra
+    class despachador_crear,despachador_resolver,obs_mongo,db_notif_insert capaEvt

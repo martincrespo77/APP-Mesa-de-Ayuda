@@ -1,0 +1,146 @@
+%% =====================================================================
+%% Mesa de Ayuda Comunicarlos — Diagrama de Flujo de Procesos y Ciclo de Vida
+%% Modelado end-to-end de los 4 roles: Solicitante, Operador, Técnico, Supervisor
+%% Compilado para visor interactivo autónomo MCP mcp-diagrama-iterativo-mermaid
+%% =====================================================================
+graph TD
+
+    subgraph sg_solicitante["1. APERTURA Y AUTOSERVICIO (Rol: Solicitante)"]
+        fl_inicio(["Inicio: Socio o Cliente detecta necesidad o falla"])
+        fl_login["Iniciar Sesión / Validar Identidad (JWT)"]
+        fl_elegir_srv["Seleccionar Servicio Contratado<br/>(Telefonía Celular | Internet | TV)"]
+        fl_valida_suscripcion{"¿Cliente tiene suscripción<br/>activa a este servicio?"}
+        fl_error_suscripcion["Rechazo: SuscripcionRequeridaError<br/>(HTTP 400 Bad Request)"]
+        fl_elegir_tipo{"¿Tipo de requerimiento?"}
+        fl_form_incidente["Completar datos de Incidente:<br/>• Urgencia (CRITICO / IMPORTANTE / MENOR)<br/>• Categoría y Pasos de reproducción"]
+        fl_form_solicitud["Completar datos de Solicitud:<br/>• Categoría (ALTA_SERVICIO / BAJA_SERVICIO)"]
+        fl_crear_ticket["FabricaRequerimientos.crear(...)<br/>Estado inicial: ABIERTO<br/>Evento: CREACION"]
+        fl_ticket_abierto(["Ticket en Estado: ABIERTO"])
+        fl_cancelar_cliente{"¿Cliente decide cancelar<br/>mientras sigue ABIERTO?"}
+        fl_cliente_cancela["Solicitante cancela requerimiento<br/>Estado: CANCELADO<br/>Evento: CANCELACION"]
+    end
+
+    subgraph sg_operador["2. TRIAGE Y ASIGNACIÓN (Rol: Operador / Nivel 1)"]
+        fl_bandeja_triage["Operador examina Bandeja General de Tickets ABIERTOS"]
+        fl_evaluar_ticket{"¿Requerimiento es procedente<br/>y con información suficiente?"}
+        fl_operador_cancela["Operador cancela / desestima ticket<br/>Estado: CANCELADO<br/>Evento: CANCELACION"]
+        fl_iniciar_analisis["Operador ejecuta: iniciar_analisis()<br/>Estado: EN_ANALISIS<br/>Evento: CAMBIO_ESTADO"]
+        fl_ticket_en_analisis(["Ticket en Estado: EN_ANALISIS"])
+        fl_listar_tecnicos["Consultar Técnicos activos del área<br/>(GET /usuarios/tecnicos)"]
+        fl_asignar_tecnico["Operador ejecuta: asignar_tecnico(tecnico_id)<br/>Asigna tecnico_asignado_id<br/>Evento: ASIGNACION"]
+        fl_ticket_asignado(["Ticket en Estado: EN_ANALISIS (con Técnico)"])
+    end
+
+    subgraph sg_tecnico["3. DIAGNÓSTICO Y RESOLUCIÓN (Rol: Técnico / Nivel 2)"]
+        fl_bandeja_tecnico["Técnico accede a su bandeja 'Mis Asignaciones'"]
+        fl_iniciar_progreso["Técnico ejecuta: iniciar_progreso()<br/>Estado: EN_PROGRESO<br/>Evento: CAMBIO_ESTADO"]
+        fl_ticket_en_progreso(["Ticket en Estado: EN_PROGRESO"])
+        fl_evaluar_atencion{"¿Qué acción técnica se requiere?"}
+        fl_interconsulta["Derivar a otro Técnico (Interconsulta):<br/>POST /requerimientos/{id}/derivar<br/>Evento: DERIVACION"]
+        fl_comentar_tecnico["Agregar Comentario Operativo / Consultar Cliente:<br/>POST /requerimientos/{id}/comentarios<br/>Evento: COMENTARIO"]
+        fl_preparar_resolucion["Diagnóstico y solución técnica aplicados"]
+        fl_redactar_nota["Redactar Nota de Resolución descriptiva obligatoria<br/>(mínimo requerido de caracteres)"]
+        fl_ejecutar_resolucion["Técnico ejecuta: resolver(nota_resolucion)<br/>Estado: RESUELTO<br/>Evento: RESOLUCION"]
+        fl_ticket_resuelto(["Ticket en Estado: RESUELTO"])
+    end
+
+    subgraph sg_cierre["4. VERIFICACIÓN Y CIERRE DE CONFORMIDAD"]
+        fl_evaluar_post_resuelto{"¿Se agrega comentario posterior<br/>por Operador o Técnico?"}
+        fl_reapertura_auto["REAPERTURA AUTOMÁTICA:<br/>Estado vuelve a: EN_PROGRESO<br/>Evento: REAPERTURA<br/>(Se limpia nota de resolución)"]
+        fl_verificacion_cliente{"¿Cliente o Mesa de Ayuda<br/>otorgan conformidad?"}
+        fl_cierre_definitivo["Ejecutar: cerrar()<br/>(Por Solicitante, Operador o Supervisor)<br/>Estado: CERRADO<br/>Evento: CIERRE"]
+        fl_ticket_cerrado(["Ticket en Estado: CERRADO (Finalizado con éxito)"])
+        fl_ticket_cancelado(["Ticket en Estado: CANCELADO (Archivado sin resolver)"])
+    end
+
+    subgraph sg_supervisor["5. SUPERVISIÓN Y NOTIFICACIONES TRANSVERSALES (Rol: Supervisor)"]
+        fl_bus_eventos["DespachadorEventos (Patrón Observer)"]
+        fl_filtro_supervisable{"¿Autor del evento es<br/>OPERADOR o TECNICO?"}
+        fl_buscar_supervisores["RepositorioSupervision:<br/>Buscar supervisores a cargo del empleado"]
+        fl_crear_notificacion["RepositorioNotificacionesMongo:<br/>Insertar Notificacion (leida=False)"]
+        fl_bandeja_supervisor["Supervisor visualiza Notificaciones en tiempo real<br/>y Tablero de Métricas / KPIs"]
+        fl_marcar_leida["Supervisor marca notificación como leída<br/>(PATCH /notificaciones/{id}/leida)"]
+        fl_intervencion_sup["Potestad de Intervención Administrativa:<br/>• Reasignación forzada • Cancelación • Cierre"]
+    end
+
+    %% Conexiones Fase Solicitante
+    fl_inicio --> fl_login
+    fl_login --> fl_elegir_srv
+    fl_elegir_srv --> fl_valida_suscripcion
+    fl_valida_suscripcion -- "No tiene suscripción" --> fl_error_suscripcion
+    fl_valida_suscripcion -- "Tiene suscripción activa" --> fl_elegir_tipo
+    fl_elegir_tipo -- "Reporte de falla" --> fl_form_incidente
+    fl_elegir_tipo -- "Gestión de trámite" --> fl_form_solicitud
+    fl_form_incidente --> fl_crear_ticket
+    fl_form_solicitud --> fl_crear_ticket
+    fl_crear_ticket --> fl_ticket_abierto
+    fl_ticket_abierto --> fl_cancelar_cliente
+    fl_cancelar_cliente -- "Sí, cancelar" --> fl_cliente_cancela
+    fl_cliente_cancela --> fl_ticket_cancelado
+    fl_cancelar_cliente -- "No, aguardar atención" --> fl_bandeja_triage
+
+    %% Conexiones Fase Operador
+    fl_bandeja_triage --> fl_evaluar_ticket
+    fl_evaluar_ticket -- "No válido / Duplicado" --> fl_operador_cancela
+    fl_operador_cancela --> fl_ticket_cancelado
+    fl_evaluar_ticket -- "Válido y prioritario" --> fl_iniciar_analisis
+    fl_iniciar_analisis --> fl_ticket_en_analisis
+    fl_ticket_en_analisis --> fl_listar_tecnicos
+    fl_listar_tecnicos --> fl_asignar_tecnico
+    fl_asignar_tecnico --> fl_ticket_asignado
+
+    %% Conexiones Fase Técnico
+    fl_ticket_asignado --> fl_bandeja_tecnico
+    fl_bandeja_tecnico --> fl_iniciar_progreso
+    fl_iniciar_progreso --> fl_ticket_en_progreso
+    fl_ticket_en_progreso --> fl_evaluar_atencion
+    fl_evaluar_atencion -- "Requiere otra especialidad" --> fl_interconsulta
+    fl_interconsulta --> fl_ticket_asignado
+    fl_evaluar_atencion -- "Consultar o informar al socio" --> fl_comentar_tecnico
+    fl_comentar_tecnico --> fl_ticket_en_progreso
+    fl_evaluar_atencion -- "Solución técnica lograda" --> fl_preparar_resolucion
+    fl_preparar_resolucion --> fl_redactar_nota
+    fl_redactar_nota --> fl_ejecutar_resolucion
+    fl_ejecutar_resolucion --> fl_ticket_resuelto
+
+    %% Conexiones Post-Resolución y Cierre
+    fl_ticket_resuelto --> fl_evaluar_post_resuelto
+    fl_evaluar_post_resuelto -- "Sí: Comentario reabre ticket" --> fl_reapertura_auto
+    fl_reapertura_auto --> fl_ticket_en_progreso
+    fl_evaluar_post_resuelto -- "No: Proceder a verificación" --> fl_verificacion_cliente
+    fl_verificacion_cliente -- "Conformidad otorgada" --> fl_cierre_definitivo
+    fl_cierre_definitivo --> fl_ticket_cerrado
+
+    %% Conexiones Transversales con Observer de Supervisión
+    fl_crear_ticket -.->|"dispara evento"| fl_bus_eventos
+    fl_iniciar_analisis -.->|"dispara evento"| fl_bus_eventos
+    fl_asignar_tecnico -.->|"dispara evento"| fl_bus_eventos
+    fl_iniciar_progreso -.->|"dispara evento"| fl_bus_eventos
+    fl_interconsulta -.->|"dispara evento"| fl_bus_eventos
+    fl_ejecutar_resolucion -.->|"dispara evento"| fl_bus_eventos
+    fl_cierre_definitivo -.->|"dispara evento"| fl_bus_eventos
+    fl_reapertura_auto -.->|"dispara evento"| fl_bus_eventos
+
+    fl_bus_eventos --> fl_filtro_supervisable
+    fl_filtro_supervisable -- "Sí (Operador o Técnico)" --> fl_buscar_supervisores
+    fl_filtro_supervisable -- "No (Solicitante)" --> fl_bandeja_supervisor
+    fl_buscar_supervisores --> fl_crear_notificacion
+    fl_crear_notificacion --> fl_bandeja_supervisor
+    fl_bandeja_supervisor --> fl_marcar_leida
+    fl_bandeja_supervisor -.->|"facultad de control"| fl_intervencion_sup
+    fl_intervencion_sup -.->|"intervenir en ticket"| fl_cierre_definitivo
+
+    %% Estilos de Nodos
+    classDef faseSolicitante fill:#132a45,stroke:#3a86ff,stroke-width:2px,color:#f8f9fa
+    classDef faseOperador fill:#3a200a,stroke:#fb8500,stroke-width:2px,color:#f8f9fa
+    classDef faseTecnico fill:#103728,stroke:#06d6a0,stroke-width:2px,color:#f8f9fa
+    classDef faseCierre fill:#331838,stroke:#b5179e,stroke-width:2px,color:#f8f9fa
+    classDef faseSupervisor fill:#4a121a,stroke:#e63946,stroke-width:2px,color:#f8f9fa
+    classDef estadoNodo fill:#2b2d42,stroke:#8d99ae,stroke-width:2px,color:#edf2f4
+
+    class fl_inicio,fl_login,fl_elegir_srv,fl_valida_suscripcion,fl_error_suscripcion,fl_elegir_tipo,fl_form_incidente,fl_form_solicitud,fl_crear_ticket,fl_cancelar_cliente,fl_cliente_cancela faseSolicitante
+    class fl_bandeja_triage,fl_evaluar_ticket,fl_operador_cancela,fl_iniciar_analisis,fl_listar_tecnicos,fl_asignar_tecnico faseOperador
+    class fl_bandeja_tecnico,fl_iniciar_progreso,fl_evaluar_atencion,fl_interconsulta,fl_comentar_tecnico,fl_preparar_resolucion,fl_redactar_nota,fl_ejecutar_resolucion faseTecnico
+    class fl_evaluar_post_resuelto,fl_reapertura_auto,fl_verificacion_cliente,fl_cierre_definitivo faseCierre
+    class fl_bus_eventos,fl_filtro_supervisable,fl_buscar_supervisores,fl_crear_notificacion,fl_bandeja_supervisor,fl_marcar_leida,fl_intervencion_sup faseSupervisor
+    class fl_ticket_abierto,fl_ticket_en_analisis,fl_ticket_asignado,fl_ticket_en_progreso,fl_ticket_resuelto,fl_ticket_cerrado,fl_ticket_cancelado estadoNodo
