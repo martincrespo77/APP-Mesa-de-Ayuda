@@ -255,13 +255,12 @@ uv run python -m desktop.main --demo
 
 ## Portal web (navegador/celular)
 
-Alternativa liviana al cliente de escritorio para que un **Solicitante**
-cargue un Incidente/Solicitud y consulte el estado de sus tickets desde
-cualquier navegador, sin instalar nada — pensado también para acceder desde
-el celular. No expone las acciones de gestión de Operador/Técnico/
-Supervisor (asignar técnico, iniciar análisis, resolver, etc.): esas quedan
-reservadas al cliente de escritorio, siguiendo la matriz de roles del
-backend.
+Interfaz web responsiva (`web/`) que implementa las **Fases 1 a 4**
+(Solicitante, Operador, Técnico y Supervisor). Se adapta dinámicamente según el
+rol del usuario autenticado, respetando la [Matriz de roles y permisos](#matriz-de-roles-y-permisos)
+tanto en el filtrado de acciones de la interfaz como en las validaciones de
+dominio en el backend. Puede utilizarse desde navegadores de escritorio o
+dispositivos móviles.
 
 Con la API corriendo (Docker o local, ver más arriba), abrir en el
 navegador:
@@ -281,36 +280,46 @@ http://192.168.0.10:8000
 (la IP se puede obtener con `ipconfig` en Windows, buscando el adaptador de
 red activo).
 
-Credenciales de prueba (requiere haber corrido el
+Credenciales de prueba para cada rol (requiere haber corrido el
 [seed](#poblar-la-base-de-datos-seed)):
 
-| Email                           | Contraseña   | Rol         |
-|----------------------------------|--------------|-------------|
-| `lucia.gomez@comunicarlos.com`  | `Seed1234!`  | Solicitante |
-| `marcos.diaz@comunicarlos.com`  | `Seed1234!`  | Solicitante |
+| Email                               | Contraseña   | Rol         | Acceso en Portal Web |
+|-------------------------------------|--------------|-------------|----------------------|
+| `lucia.gomez@comunicarlos.com`     | `Seed1234!`  | Solicitante | Creación, mis tickets, seguimiento y cierre |
+| `rosa.molina@comunicarlos.com.ar`  | `Seed1234!`  | Operador    | Bandeja global, asignación de técnicos, comentarios |
+| `ivan.rios@comunicarlos.com.ar`    | `Seed1234!`  | Técnico     | Tickets asignados, análisis, progreso, derivación y resolución |
+| `sofia.jefa@comunicarlos.com.ar`   | `Seed1234!`  | Supervisor  | Métricas globales, equipo supervisado, notificaciones y usuarios |
 
-Funcionalidad disponible:
+Funcionalidades disponibles por rol:
 
-- **Login**: guarda el JWT en `localStorage` del navegador; se limpia solo
-  ante un token vencido o un 401 de la API.
-- **Nuevo requerimiento**: formulario reactivo que alterna los campos según
-  el tipo elegido (Incidente o Solicitud).
-- **Mis requerimientos**: listado de los propios tickets con su estado, y
-  un detalle con el historial de auditoría completo. Desde el detalle, el
-  Solicitante puede **cancelar** un ticket propio mientras está `ABIERTO`
-  o **confirmar el cierre** de uno `RESUELTO` — las únicas dos transiciones
-  que el dominio le permite ejecutar a ese rol.
+- **Autenticación (JWT)**: Login unificado que almacena el token en `localStorage`,
+  gestionando la expiración y cierre de sesión de forma segura.
+- **Solicitante (Fase 1)**: Formulario reactivo de Incidentes/Solicitudes filtrado
+  automáticamente por sus servicios contratados (`servicios_suscriptos`); listado
+  de tickets propios con auditoría; cancelación de tickets en `ABIERTO`, confirmación
+  de cierre en `RESUELTO` y comentarios de seguimiento.
+- **Operador (Fase 2)**: Bandeja completa de requerimientos con filtros multicriterio;
+  asignación técnica inicial; cancelación; reapertura de requerimientos resueltos
+  mediante comentarios.
+- **Técnico (Fase 3)**: Vista de tickets propios asignados; transiciones de estado
+  (`EN_ANALISIS`, `EN_PROGRESO`, `RESUELTO` con nota de resolución); derivación
+  entre técnicos (interconsulta) y comentarios operativos.
+- **Supervisor (Fase 4)**: Panel de métricas globales (tickets abiertos, en progreso,
+  resueltos); administración de equipo supervisado; bandeja de notificaciones; y
+  gestión integral de usuarios (creación con validación de email corporativo, cambio
+  de rol y activación/desactivación).
 
-## Supervisión y notificaciones (solo API)
+## Supervisión y notificaciones
 
-Un Supervisor administra qué Operadores/Técnicos audita (`POST/GET/DELETE
-/supervisiones`, relación N:M) y consulta las notificaciones que se generan
-automáticamente cuando alguno de sus supervisados genera un evento sobre un
-requerimiento (`GET /notificaciones`, `PATCH /notificaciones/{id}/leida`).
-Es funcionalidad exclusiva de la API: ni el cliente de escritorio ni el
-portal web agregan pantallas para esto (decisión de diseño), pero puede
-probarse con la colección de Bruno (`bruno/03-supervision/`,
-`bruno/04-notificaciones/`) o directamente contra `/docs`.
+Un Supervisor administra qué Operadores y Técnicos audita (`POST/GET/DELETE
+/supervisiones`, relación N:M) y gestiona las notificaciones generadas
+automáticamente ante eventos auditables ejecutados por sus supervisados
+(`GET /notificaciones`, `PATCH /notificaciones/{id}/leida`).
+
+Esta capacidad está disponible tanto en el **Portal Web** (pestañas dedicadas
+"Equipo supervisado" y "Notificaciones" para el rol Supervisor) como directamente
+a través de la **API REST** (documentada en Swagger `/docs` y con casos de prueba
+en las colecciones de Bruno: `bruno/03-supervision/` y `bruno/04-notificaciones/`).
 
 ## Tests
 
