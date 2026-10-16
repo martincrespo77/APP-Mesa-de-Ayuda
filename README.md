@@ -1,105 +1,163 @@
-# Mesa de Ayuda — Cooperativa Comunicarlos
+<p align="center">
+  <img src="assets/logo.svg" alt="Mesa de Ayuda Comunicarlos" width="760">
+</p>
 
-Sistema de gestión de Mesa de Ayuda para una cooperativa de servicios (fibra
-óptica, telefonía IP, TV), desarrollado como Proyecto Profesional (PP5) para
-FIE. Permite a los usuarios de la cooperativa reportar **incidentes** (fallas
-de servicio) y **solicitudes** (pedidos administrativos), y a supervisores,
-operadores y técnicos gestionarlos a través de un ciclo de vida con estados y
-permisos por rol.
+# 🎧 Mesa de Ayuda — Cooperativa Comunicarlos
 
-## Arquitectura
+## Sistema de Gestión de Incidentes y Servicios (FIE PP5)
 
-El proyecto está organizado en tres capas independientes que se comunican
-únicamente por HTTP/JSON, siguiendo un diseño de dominio rico (DDD-lite):
+> **Sistema integral de Help Desk & IT Service Management para servicios de telecomunicaciones (Fibra Óptica, Telefonía IP, TV), construido con arquitectura DDD-lite, API REST FastAPI, clientes Web/Desktop y persistencia en MongoDB.**
+
+**Descripción académica:** Proyecto Profesional (PP5) para la Facultad de Informática y Electrónica (FIE). Modela el ciclo de vida completo de atención técnica mediante roles estrictos (Solicitante, Operador, Técnico, Supervisor), validación de suscripciones de telecomunicaciones, derivación entre técnicos (interconsulta), reapertura automática auditada y despacho de eventos en tiempo real mediante el patrón Observer.
+
+> ℹ️ **Estado del Proyecto:** Prototipo funcional completo con **257 tests automatizados**, clientes Web y Desktop operativos, y suite de diagramas UML/arquitectura interactiva en `docs/diagramas/`.
+
+---
+
+## ⚡ Features
+
+| Feature / Módulo | Descripción Técnica | Estado |
+|---|---|---|
+| **Arquitectura DDD-lite** | Dominio rico con validación de transiciones en las propias entidades (`Information Expert`) | ✅ Implementado |
+| **Jerarquía Polimórfica** | `Incidente` (urgencia, SLA, pasos) y `Solicitud` (gestión administrativa) instanciados por `Factory Method` | ✅ Implementado |
+| **RBAC Estricto (4 Roles)** | Solicitante, Operador, Técnico y Supervisor con permisos granulares enforced en el backend | ✅ Implementado |
+| **Auth Segura** | JWT (Bearer Tokens vía python-jose) + hash de contraseñas con bcrypt | ✅ Implementado |
+| **Ciclo de Vida de Tickets** | `ABIERTO` ➔ `EN_ANALISIS` ➔ `EN_PROGRESO` ➔ `RESUELTO` ➔ `CERRADO` | ✅ Implementado |
+| **Reapertura Automática** | Comentar sobre un ticket `RESUELTO` lo regresa a `EN_PROGRESO` disparando evento `REAPERTURA` | ✅ Implementado |
+| **Derivación (Interconsulta)**| Un técnico asignado puede transferir el ticket a otro técnico especializado | ✅ Implementado |
+| **Observer Event Bus** | `DespachadorEventos` notifica en tiempo real a `ObservadorLogger` y `ObservadorNotificacionesMongo` | ✅ Implementado |
+| **Portal Web Responsive** | HTML5 + Vanilla CSS + Vanilla JS (`fetch`), servido estático sin frameworks ni build step | ✅ Fases 1 a 4 completas |
+| **Cliente Escritorio PyQt6** | Cliente nativo con soporte de Modo Conectado (`ApiClienteHttp`) y Modo Demo (`ApiClienteDemo`) | ✅ Implementado |
+| **Persistencia NoSQL** | Repositorios desacoplados con PyMongo sobre MongoDB 7 | ✅ Implementado |
+| **Testing & Calidad** | 257 tests (pytest + mongomock + fakes en memoria), `mypy --strict`, `ruff` | ✅ 257 PASS / 0 FAIL |
+| **Suite de Diagramas** | Visor HTML interactivo unificado (Casos de Uso, Clases, Flujo y Secuencia) | ✅ [`docs/diagramas/`](docs/diagramas/README.md) |
+
+---
+
+## 🏗️ Architecture
+
+<p align="center">
+  <img src="assets/architecture.svg" alt="Mesa de Ayuda - Arquitectura del Sistema" width="760">
+</p>
 
 ```
-├── app/                  API REST (FastAPI)
-│   ├── compartido/       Excepciones base + tipos compartidos (RolUsuario, ServicioComunicarlos)
-│   ├── usuarios/         Dominio, servicios, repositorio y router de Usuario
-│   ├── requerimientos/   Dominio, servicios, repositorio y router de Requerimiento
-│   │   └── dominio/      Requerimiento (base), Incidente, Solicitud, Comentario, Estados
-│   ├── supervision/      Relación N:M Supervisor <-> Operador/Técnico
-│   ├── notificaciones/   Entidad Notificacion + Observer (despacha eventos de dominio)
-│   ├── infraestructura/  Conexión a MongoDB, repositorios concretos (PyMongo)
-│   ├── auth.py           JWT + bcrypt
-│   ├── deps.py           Inyección de dependencias de FastAPI
-│   ├── config.py         Configuración tipada (variables de entorno)
-│   └── main.py           Punto de entrada de la API
-├── desktop/              Cliente de escritorio (PyQt6), independiente de app/
-│   ├── views/            LoginWindow, MainWindow
-│   ├── api_client.py     ClienteApi (ABC): ApiClienteHttp / ApiClienteDemo
-│   ├── models.py         DTOs propios del cliente (no reusa el dominio de app/)
-│   └── main.py           Punto de entrada del cliente
-├── web/                  Portal web (HTML/CSS/JS puro), montado como estáticos en app/main.py
-│   ├── index.html        Login (JWT en localStorage)
-│   ├── app.html          Portal: alta de ticket, listado y detalle
-│   └── js/, css/         fetch a la API, sin frameworks ni build step
+[ Portal Web (web/) ]        [ Cliente Desktop PyQt6 (desktop/) ]
+         │                                    │
+         └───────────────┬────────────────────┘
+                         │ (HTTP / JSON REST)
+                         ▼
+┌────────────────────────────────────────────────────────┐
+│ FastAPI API Gateway + Auth Guard (JWT Bearer + bcrypt) │
+└────────────────────────┬───────────────────────────────┘
+                         │
+                         ▼
+┌────────────────────────────────────────────────────────┐
+│                 DOMINIO RICO (DDD-lite)                │
+│                                                        │
+│  FabricaRequerimientos ──► Incidente / Solicitud       │
+│  Requerimiento (Expert) ──► Máquina de Estados         │
+│  Usuarios & Supervisión ──► Validación de Contratos    │
+└──────────────┬──────────────────────────┬──────────────┘
+               │ (Eventos)                │ (Repositorios)
+               ▼                          ▼
+┌─────────────────────────────┐  ┌───────────────────────┐
+│ DespachadorEventos Observer │  │ Puertos / Repositorio │
+│ ├─► ObservadorLogger        │  │          │            │
+│ └─► Notificaciones a Jefes  │  │ Adaptadores PyMongo   │
+└─────────────────────────────┘  └──────────┬────────────┘
+                                            │
+                                            ▼
+                                  [ MongoDB 7 Engine ]
+```
+
+### Principios y Patrones de Diseño Aplicados
+
+- **Information Expert**: La entidad `Requerimiento` es la única responsable de validar sus transiciones de estado, los permisos del actor que las ejecuta, la incorporación de comentarios de seguimiento y las derivaciones técnicas.
+- **Factory Method**: `FabricaRequerimientos` centraliza la creación y reconstitución polimórfica de `Incidente` (con SLA, urgencia y criticidad) y `Solicitud` (trámites de alta/baja de servicios).
+- **Observer**: `DespachadorEventos` desacopla las consecuencias secundarias de los cambios de estado. `ObservadorLogger` genera trazas de auditoría y `ObservadorNotificacionesMongo` crea alertas persistidas para los supervisores a cargo del operador o técnico involucrado.
+- **Repository & Dependency Inversion**: Los servicios de aplicación operan contra interfaces abstractas (`RepositorioUsuarios`, `RepositorioRequerimientos`, `RepositorioSupervision`, `RepositorioNotificaciones`). En runtime se usan adaptadores PyMongo, y en pruebas se inyectan implementaciones falsas en memoria (`tests/fakes.py`), permitiendo ejecutar los 257 tests en segundos sin necesidad de un motor MongoDB levantado.
+
+Detalle de diagramas UML interactivos: [`docs/diagramas/README.md`](docs/diagramas/README.md)
+
+---
+
+## ⚖️ Matriz de Roles y Reglas de Negocio
+
+El sistema aplica un control de acceso basado en roles (**RBAC estricto**). Las reglas se validan en el núcleo de dominio:
+
+| Acción / Operación | Solicitante | Operador | Técnico | Supervisor |
+|---|:---:|:---:|:---:|:---:|
+| Crear requerimiento propio | ✅ | ✅ | ✅ | ✅ |
+| Ver todos los requerimientos | ❌ *(solo propios)* | ✅ | ✅ | ✅ |
+| Asignar técnico al ticket | ❌ | ✅ | ❌ | ✅ |
+| Iniciar progreso del ticket | ❌ | ❌ | ✅ *(si asignado)* | ✅ |
+| Marcar como RESUELTO | ❌ | ❌ | ✅ *(si asignado)* | ✅ |
+| Dar cierre de conformidad | ✅ *(propios)* | ✅ | ❌ | ✅ |
+| Cancelar / Desestimar | ✅ *(si ABIERTO)* | ✅ | ❌ | ✅ |
+| Agregar comentario | ✅ *(propios)* | ✅ | ✅ *(si asignado)* | ❌ |
+| Derivar a otro técnico | ❌ | ❌ | ✅ *(si asignado)* | ❌ |
+| Administrar usuarios | ❌ | ❌ | ❌ | ✅ |
+| Administrar supervisiones | ❌ | ❌ | ❌ | ✅ |
+| Recibir notificaciones | ❌ | ❌ | ❌ | ✅ |
+
+### Reglas Críticas del Ciclo de Vida:
+1. `ABIERTO` solo puede pasar a `EN_ANALISIS` (por Operador/Supervisor) o `CANCELADO`.
+2. `EN_ANALISIS` requiere que haya un técnico asignado para poder transicionar a `EN_PROGRESO`.
+3. `EN_PROGRESO` solo pasa a `RESUELTO` mediante una **nota de resolución técnica descriptiva**.
+4. **Reapertura automática:** Si un Operador o Técnico comenta sobre un ticket `RESUELTO`, este vuelve automáticamente a `EN_PROGRESO` (evento `REAPERTURA`).
+5. **Derivación (Interconsulta):** Solo el Técnico actualmente asignado puede derivar el ticket a otro Técnico (`POST /requerimientos/{id}/derivar`) mientras el estado sea `EN_ANALISIS` o `EN_PROGRESO`.
+
+---
+
+## 📂 Repository Structure
+
+```
+APP-Mesa-de-Ayuda/
+├── README.md                   # Documentación principal del repositorio
+├── CLAUDE.md                   # Guía de contexto técnico y reglas de desarrollo
+├── pyproject.toml · uv.lock    # Gestión determinista de dependencias con uv
+├── Dockerfile                  # Imagen multi-stage (uv + non-root user)
+├── docker-compose.yml          # Orquestación de API FastAPI + MongoDB 7
+├── assets/                     # Recursos gráficos vectoriales (logo.svg, architecture.svg)
+├── app/                        # Backend REST API (FastAPI + DDD-lite)
+│   ├── main.py                 # Punto de entrada de la API y montaje de estáticos
+│   ├── config.py               # Variables de entorno tipadas con Pydantic
+│   ├── auth.py                 # Seguridad: hashing bcrypt y tokens JWT
+│   ├── deps.py                 # Inyección de dependencias de FastAPI y validación RBAC
+│   ├── errores.py              # Manejo centralizado de excepciones de dominio
+│   ├── compartido/             # Tipos compartidos (RolUsuario, ServicioComunicarlos)
+│   ├── usuarios/               # Dominio, Aggregate Root, servicios y router de Usuario
+│   ├── requerimientos/         # Dominio rico: Requerimiento, Incidente, Solicitud, Estados
+│   ├── supervision/            # Gestión de relaciones N:M Supervisor <-> Equipo técnico
+│   ├── notificaciones/         # Entidad Notificación + Observer Event Bus
+│   └── infraestructura/        # Conexión a MongoDB y repositorios PyMongo
+├── desktop/                    # Cliente de escritorio desacoplado (PyQt6)
+│   ├── main.py                 # Punto de entrada del cliente desktop
+│   ├── api_client.py           # ClienteApi (ABC): ApiClienteHttp / ApiClienteDemo
+│   ├── models.py               # DTOs propios del cliente desktop
+│   └── views/                  # Vistas: LoginWindow, MainWindow
+├── web/                        # Portal Web Responsive (HTML5 / Vanilla CSS / JS)
+│   ├── index.html              # Login unificado con JWT en localStorage
+│   ├── app.html                # Portal dinámico según rol (Fases 1 a 4)
+│   ├── css/                    # Estilos CSS responsivos (móvil y escritorio)
+│   └── js/                     # Lógica cliente (fetch a la API, sin frameworks)
+├── docs/                       # Documentación técnica
+│   └── diagramas/              # Suite interactiva (.html) y fuentes Mermaid (.mmd)
 ├── scripts/
-│   └── seed_mongo.py     Script de siembra de datos de ejemplo en MongoDB
-├── tests/                257 tests (pytest)
-├── bruno/                Colección de requests HTTP (Bruno) para probar la API
-├── Dockerfile            Imagen multi-stage de la API (uv + usuario no-root)
-└── docker-compose.yml    Orquesta la API + MongoDB
+│   └── seed_mongo.py           # Script idempotente de siembra de datos de prueba
+├── bruno/                      # Colección completa de peticiones HTTP (Bruno)
+└── tests/                      # Suite de 257 pruebas unitarias y de integración
 ```
 
-### Patrones de diseño aplicados
+---
 
-- **Information Expert**: `Requerimiento` valida sus propias transiciones de
-  estado y los permisos del actor que las invoca, incluidos los comentarios
-  (`agregar_comentario`, con reapertura automática de un `RESUELTO`) y la
-  derivación entre técnicos (`derivar_interconsulta`).
-- **Factory Method**: `FabricaRequerimientos` crea y reconstruye Incidentes y
-  Solicitudes según su tipo.
-- **Observer**: `DespachadorEventos` notifica cada evento de dominio a los
-  observadores suscriptos — `ObservadorLogger` (auditoría por log) y
-  `ObservadorNotificacionesMongo` (genera una `Notificacion` real por cada
-  supervisor de un Operador/Técnico que generó el evento).
-- **Repository**: `RepositorioUsuarios`/`RepositorioRequerimientos`/
-  `RepositorioSupervision`/`RepositorioNotificaciones` son interfaces
-  abstractas; `app/infraestructura/` las implementa con PyMongo, y
-  `tests/fakes.py` las implementa en memoria para los tests.
+## 🚀 Puesta en Marcha
 
-El cliente de escritorio (`desktop/`) no importa nada de `app/`: se comunica
-exclusivamente por HTTP a través de `ClienteApi`, que tiene dos
-implementaciones intercambiables:
+### Requisitos Previos
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) instalado (o Python 3.12).
+- Docker y Docker Compose (recomendado para ejecución integrada).
 
-- `ApiClienteHttp`: cliente real contra la API (usa `httpx`).
-- `ApiClienteDemo`: dataset sintético en memoria, sin red ni backend
-  (usado por el **Modo Demostración**, ver más abajo).
-
-El portal web (`web/`) es igual de independiente: JavaScript puro que
-consume la API vía `fetch`, servido como archivos estáticos por la misma
-instancia de FastAPI (`app.mount("/", StaticFiles(...))` en `app/main.py`,
-montado después de los routers de API para que estos resuelvan primero). Al
-ser mismo origen que la API no necesita configurar CORS, y es accesible
-desde el celular en la misma red sin nada adicional (ver
-[Portal web](#portal-web-navegadorcelular) más abajo).
-
-### Stack tecnológico
-
-- **Backend**: Python 3.12, FastAPI, Pydantic v2, PyMongo, python-jose (JWT),
-  bcrypt.
-- **Cliente de escritorio**: PyQt6, httpx.
-- **Portal web**: HTML5 + CSS + JavaScript vanilla (`fetch`), sin frameworks
-  ni paso de build — servido como estáticos por la propia API.
-- **Persistencia**: MongoDB 7.
-- **Gestión de dependencias**: [uv](https://docs.astral.sh/uv/).
-- **Testing**: pytest, mongomock (para tests de infraestructura sin Mongo real).
-- **Calidad de código**: ruff (lint), mypy --strict.
-- **Contenedores**: Docker / Docker Compose.
-- **Pruebas de API**: [Bruno](https://www.usebruno.com/) (`bruno/`).
-
-## Requisitos previos
-
-- [uv](https://docs.astral.sh/uv/getting-started/installation/) instalado.
-- Python 3.12 (uv lo resuelve automáticamente si no está instalado).
-- Docker y Docker Compose (para levantar el entorno completo).
-- Opcional: [Bruno](https://www.usebruno.com/) (app de escritorio o
-  `npx @usebruno/cli`) para correr la colección de requests de `bruno/`.
-
-## Puesta en marcha
-
-### 1. Clonar e instalar dependencias
+### 1. Clonar e Instalar Dependencias
 
 ```bash
 git clone https://github.com/martincrespo77/APP-Mesa-de-Ayuda.git
@@ -107,286 +165,114 @@ cd APP-Mesa-de-Ayuda
 uv sync
 ```
 
-Esto crea el entorno virtual (`.venv/`) e instala todas las dependencias
-(incluidas las de desarrollo: pytest, ruff, mypy) según `uv.lock`.
+### 2. Configuración de Entorno
 
-### 2. Variables de entorno
-
-Copiar el archivo de ejemplo y ajustar si hace falta:
+Copiar el archivo de plantilla:
 
 ```bash
 cp .env.example .env
 ```
 
-| Variable             | Descripción                                   | Valor por defecto |
-|-----------------------|-----------------------------------------------|--------------------|
-| `SECRET_KEY`          | Clave para firmar JWT (mínimo 32 caracteres)  | —                  |
-| `ALGORITHM`           | Algoritmo de firma JWT                        | `HS256`            |
-| `EXPIRACION_MINUTOS`  | Expiración del token JWT                      | `60`               |
-| `MONGODB_URL`         | URL de conexión a MongoDB                     | —                  |
-| `MONGODB_DB_NAME`     | Nombre de la base de datos                    | —                  |
+| Variable | Descripción | Valor por Defecto |
+|---|---|---|
+| `SECRET_KEY` | Clave secreta para firma criptográfica JWT | — *(Obligatoria)* |
+| `ALGORITHM` | Algoritmo de firma de tokens | `HS256` |
+| `EXPIRACION_MINUTOS` | Tiempo de vida del access token | `60` |
+| `MONGODB_URL` | String de conexión a MongoDB | `mongodb://localhost:27017` |
+| `MONGODB_DB_NAME` | Nombre de la base de datos | `mesa_de_ayuda` |
 
-`SECRET_KEY`, `MONGODB_URL` y `MONGODB_DB_NAME` son obligatorias: la app
-falla rápido al arrancar si no están definidas.
-
-El `.env` se usa al correr la API, el seed o el cliente desde el host (`uv
-run ...`); los valores de `.env.example` apuntan al MongoDB que expone
-Docker Compose en `localhost:27017`. El contenedor `api` no lee el `.env`:
-recibe sus variables desde `docker-compose.yml`.
-
-### 3. Levantar el entorno con Docker (recomendado)
+### 3. Levantar con Docker Compose (Recomendado)
 
 ```bash
 docker compose up --build
 ```
 
-Esto levanta:
+Esto inicia:
+- **MongoDB 7 (`mongo`)**: Puerto `27017` con healthcheck.
+- **API FastAPI (`api`)**: Puerto `8000`, esperando la disponibilidad de la base de datos.
 
-- `mongo`: MongoDB 7, con healthcheck (puerto `27017`).
-- `api`: la API FastAPI, esperando a que `mongo` esté saludable antes de
-  arrancar (puerto `8000`).
-
-Verificar que la API responde:
-
+Verificar el estado del servicio:
 ```bash
 curl http://localhost:8000/health
-# {"status": "ok"}
+# {"status":"ok"}
 ```
+Documentación interactiva Swagger: `http://localhost:8000/docs`
 
-La documentación interactiva (Swagger) queda disponible en
-`http://localhost:8000/docs`.
+---
 
-Para bajar el entorno:
+## 🧪 Datos de Prueba (Seed)
+
+El script `scripts/seed_mongo.py` puebla MongoDB de forma idempotente con usuarios de cada rol, tickets en distintos estados y relaciones de supervisión:
 
 ```bash
-docker compose down
-```
-
-### 3bis. Alternativa: correr la API en local (sin Docker)
-
-Con un MongoDB accesible (local o remoto) y `.env` apuntando a él:
-
-```bash
-uv run uvicorn app.main:app --reload
-```
-
-## Poblar la base de datos (seed)
-
-`scripts/seed_mongo.py` siembra datos de ejemplo directamente contra
-MongoDB usando las entidades de dominio y los repositorios reales (no pega
-a la API): 6 usuarios (al menos uno por cada rol, los Solicitantes con
-`servicios_suscriptos`) y 8 requerimientos (Incidentes y Solicitudes)
-cubriendo los distintos estados del ciclo de vida, más una relación de
-supervisión y una notificación de ejemplo. Es idempotente (usa ids
-deterministas).
-
-Con el backend/Mongo ya levantado (Docker o local):
-
-```bash
+# Desde el host con uv:
 uv run python -m scripts.seed_mongo
-# o, dentro del contenedor de la API:
+
+# O dentro del contenedor Docker:
 docker compose exec api python -m scripts.seed_mongo
 ```
 
-Usuarios de ejemplo creados (contraseña `Seed1234!` para todos):
+### Credenciales de Acceso Universal (`Seed1234!`):
 
-| Email                               | Rol         |
-|-------------------------------------|-------------|
-| `sofia.jefa@comunicarlos.com.ar`   | Supervisor  |
-| `rosa.molina@comunicarlos.com.ar`  | Operador    |
-| `ivan.rios@comunicarlos.com.ar`    | Técnico     |
-| `marta.suarez@comunicarlos.com.ar` | Técnico (sin tickets; destino para probar la derivación) |
-| `lucia.gomez@comunicarlos.com`     | Solicitante |
-| `marcos.diaz@comunicarlos.com`     | Solicitante |
+| Rol | Email | Propósito / Alcance |
+|---|---|---|
+| 👑 **Supervisor** | `sofia.jefa@comunicarlos.com.ar` | Métricas globales, supervisión N:M, notificaciones y usuarios |
+| 🎧 **Operador** | `rosa.molina@comunicarlos.com.ar` | Bandeja general, triage, asignación de técnicos y comentarios |
+| 🔧 **Técnico** | `ivan.rios@comunicarlos.com.ar` | Tickets asignados, diagnóstico, derivación y resolución |
+| 🔧 **Técnico 2** | `marta.suarez@comunicarlos.com.ar` | Técnico de destino para probar la interconsulta/derivación |
+| 👤 **Solicitante** | `lucia.gomez@comunicarlos.com` | Solicitante con abono a Fibra Óptica, TV y Telefonía |
+| 👤 **Solicitante** | `marcos.diaz@comunicarlos.com` | Solicitante con abono a Internet Banda Ancha |
 
-Reglas de negocio validadas en el dominio (`Usuario`): Operador, Técnico y
-Supervisor exigen un email `@comunicarlos.com.ar` (el Solicitante puede usar
-cualquier email) y no tienen `servicios_suscriptos`; el Solicitante, al
-revés, debe suscribirse a al menos uno de los servicios de la cooperativa
-(`ServicioComunicarlos`: `TELEFONIA_CELULAR`, `INTERNET_BANDA_ANCHA`,
-`TELEVISION`). Violar cualquiera de las dos lanza `EmailCorporativoRequeridoError`
-o `SuscripcionRequeridaError` (400).
+---
 
-### Categorías de Incidente y Solicitud
+## 💻 Clientes de Acceso
 
-- **Incidente**: `urgencia` (`CRITICO`/`IMPORTANTE`/`MENOR`), `categoria`
-  (`SERVICIO_INACCESIBLE`/`BLOQUEO_SIM`/`PERDIDA_O_DESTRUCCION_DE_EQUIPO`) y
-  `servicio` (`ServicioComunicarlos`), además de `pasos_reproduccion`.
-- **Solicitud**: `categoria` (`ALTA_SERVICIO`/`BAJA_SERVICIO`) y `servicio`.
+### 1. Portal Web (Navegador y Móvil)
+El portal web (`web/`) está optimizado para dispositivos móviles y de escritorio. Al estar servido por FastAPI, no requiere configurar CORS:
 
-Un ticket admite **comentarios** de seguimiento (`POST
-/requerimientos/{id}/comentarios`): Solicitante solo sobre lo propio,
-Operador siempre, Técnico solo si es el asignado, Supervisor nunca. Un
-comentario de Operador/Técnico sobre un `RESUELTO` lo reabre a
-`EN_PROGRESO` (auditado como evento `REAPERTURA`, no como un estado nuevo).
-El técnico asignado puede derivar el ticket a otro técnico (`POST
-/requerimientos/{id}/derivar`, interconsulta) mientras está `EN_ANALISIS`
-o `EN_PROGRESO`.
+- **Desde la PC:** `http://localhost:8000`
+- **Desde el Celular (misma red Wi-Fi o Tailscale):** `http://<IP_LOCAL>:8000`
 
-## Cliente de escritorio (PyQt6)
-
-El cliente vive en `desktop/` y es independiente de la API: puede correrse
-en **modo conectado** (contra una API real) o en **Modo Demostración**
-(datos sintéticos en memoria, sin backend ni red).
-
-### Modo conectado (real)
-
-Requiere la API corriendo (Docker o local) y, opcionalmente, la base
-poblada con el seed:
+### 2. Cliente de Escritorio (PyQt6)
+Ubicado en `desktop/`, se comunica con la API vía HTTP y cuenta con dos modalidades:
 
 ```bash
-uv run python -m desktop.main
-```
-
-Por defecto apunta a `http://localhost:8000`; se puede cambiar con `--url`:
-
-```bash
+# Modo Conectado (requiere API levantada):
 uv run python -m desktop.main --url http://localhost:8000
-```
 
-### Modo Demostración (`--demo`)
-
-No requiere backend ni MongoDB — arranca con un dataset sintético en
-memoria, ideal para mostrar la UI sin depender de infraestructura:
-
-```bash
+# Modo Demostración (100% offline, datos en memoria):
 uv run python -m desktop.main --demo
 ```
 
-## Portal web (navegador/celular)
+---
 
-Interfaz web responsiva (`web/`) que implementa las **Fases 1 a 4**
-(Solicitante, Operador, Técnico y Supervisor). Se adapta dinámicamente según el
-rol del usuario autenticado, respetando la [Matriz de roles y permisos](#matriz-de-roles-y-permisos)
-tanto en el filtrado de acciones de la interfaz como en las validaciones de
-dominio en el backend. Puede utilizarse desde navegadores de escritorio o
-dispositivos móviles.
+## 🔍 Verificación, Calidad y Tests
 
-Con la API corriendo (Docker o local, ver más arriba), abrir en el
-navegador:
-
-```
-http://localhost:8000
-```
-
-Desde el celular (misma red Wi-Fi que la máquina donde corre la API),
-reemplazar `localhost` por la IP de esa máquina en la red local, por
-ejemplo:
-
-```
-http://192.168.0.10:8000
-```
-
-(la IP se puede obtener con `ipconfig` en Windows, buscando el adaptador de
-red activo).
-
-Credenciales de prueba para cada rol (requiere haber corrido el
-[seed](#poblar-la-base-de-datos-seed)):
-
-| Email                               | Contraseña   | Rol         | Acceso en Portal Web |
-|-------------------------------------|--------------|-------------|----------------------|
-| `lucia.gomez@comunicarlos.com`     | `Seed1234!`  | Solicitante | Creación, mis tickets, seguimiento y cierre |
-| `rosa.molina@comunicarlos.com.ar`  | `Seed1234!`  | Operador    | Bandeja global, asignación de técnicos, comentarios |
-| `ivan.rios@comunicarlos.com.ar`    | `Seed1234!`  | Técnico     | Tickets asignados, análisis, progreso, derivación y resolución |
-| `sofia.jefa@comunicarlos.com.ar`   | `Seed1234!`  | Supervisor  | Métricas globales, equipo supervisado, notificaciones y usuarios |
-
-Funcionalidades disponibles por rol:
-
-- **Autenticación (JWT)**: Login unificado que almacena el token en `localStorage`,
-  gestionando la expiración y cierre de sesión de forma segura.
-- **Solicitante (Fase 1)**: Formulario reactivo de Incidentes/Solicitudes filtrado
-  automáticamente por sus servicios contratados (`servicios_suscriptos`); listado
-  de tickets propios con auditoría; cancelación de tickets en `ABIERTO`, confirmación
-  de cierre en `RESUELTO` y comentarios de seguimiento.
-- **Operador (Fase 2)**: Bandeja completa de requerimientos con filtros multicriterio;
-  asignación técnica inicial; cancelación; reapertura de requerimientos resueltos
-  mediante comentarios.
-- **Técnico (Fase 3)**: Vista de tickets propios asignados; transiciones de estado
-  (`EN_ANALISIS`, `EN_PROGRESO`, `RESUELTO` con nota de resolución); derivación
-  entre técnicos (interconsulta) y comentarios operativos.
-- **Supervisor (Fase 4)**: Panel de métricas globales (tickets abiertos, en progreso,
-  resueltos); administración de equipo supervisado; bandeja de notificaciones; y
-  gestión integral de usuarios (creación con validación de email corporativo, cambio
-  de rol y activación/desactivación).
-
-## Supervisión y notificaciones
-
-Un Supervisor administra qué Operadores y Técnicos audita (`POST/GET/DELETE
-/supervisiones`, relación N:M) y gestiona las notificaciones generadas
-automáticamente ante eventos auditables ejecutados por sus supervisados
-(`GET /notificaciones`, `PATCH /notificaciones/{id}/leida`).
-
-Esta capacidad está disponible tanto en el **Portal Web** (pestañas dedicadas
-"Equipo supervisado" y "Notificaciones" para el rol Supervisor) como directamente
-a través de la **API REST** (documentada en Swagger `/docs` y con casos de prueba
-en las colecciones de Bruno: `bruno/03-supervision/` y `bruno/04-notificaciones/`).
-
-## Tests
-
-Correr toda la suite (257 tests):
+Ejecución de la suite completa de 257 pruebas automatizadas:
 
 ```bash
+# Tests unitarios y de integración:
 uv run pytest
-```
 
-Los tests de infraestructura (repositorios PyMongo) usan `mongomock`, y los
-de routers de FastAPI inyectan repositorios falsos en memoria
-(`tests/fakes.py`) vía `app.dependency_overrides` — ningún test requiere
-una instancia real de MongoDB corriendo.
-
-### Lint y tipado estático
-
-```bash
+# Verificación de formato y linter:
 uv run ruff check .
+
+# Tipado estático estricto:
 uv run mypy app/ desktop/
 ```
 
-## Probar la API con Bruno
-
-La carpeta `bruno/` contiene una colección de requests HTTP organizada por
-dominio (`01-usuarios/`, `02-requerimientos/`, `03-supervision/`,
-`04-notificaciones/`), pensada para ejecutarse contra los datos del seed.
-Ver [`bruno/README.md`](bruno/README.md) para el detalle de cada flujo.
-
-Con la API corriendo y la base poblada:
+### Pruebas de API con Bruno
+En la carpeta `bruno/` se encuentra la colección para ejecutar flujos de prueba automatizados:
 
 ```bash
 npx @usebruno/cli run bruno --env local
 ```
 
-O abriendo la carpeta `bruno/` como colección en la app de escritorio de
-Bruno.
+---
 
-> **Nota**: tanto el CLI como la app de Bruno persisten en
-> `bruno/environments/local.bru` los tokens/ids generados en tiempo de
-> ejecución. Si tras correr la colección ese archivo queda con esos valores
-> en vez de las variables originales, restaurarlo antes de commitear con
-> `git checkout -- bruno/environments/local.bru`.
+## 📊 Documentación de Arquitectura
 
-## Matriz de roles y permisos
+El sistema incluye una suite de diagramas UML interactivos en [`docs/diagramas/`](docs/diagramas/README.md).
 
-El dominio valida cada operación según el rol del actor (`RolUsuario`); la
-UI solo oculta lo que el backend rechazaría de todos modos.
-
-| Acción / Operación          | Solicitante       | Operador | Técnico         | Supervisor |
-|-----------------------------|:-----------------:|:--------:|:---------------:|:----------:|
-| Crear requerimiento propio  | ✅                | ✅       | ✅              | ✅         |
-| Ver todos los requerimientos| ❌ (solo propios) | ✅       | ✅              | ✅         |
-| Asignar técnico al ticket   | ❌                | ✅       | ❌              | ✅         |
-| Iniciar progreso del ticket | ❌                | ❌       | ✅ (si asignado)| ✅         |
-| Marcar como RESUELTO        | ❌                | ❌       | ✅ (si asignado)| ✅         |
-| Dar cierre de conformidad   | ✅ (propios)      | ✅       | ❌              | ✅         |
-| Cancelar / Desestimar       | ✅ (si ABIERTO)   | ✅       | ❌              | ✅         |
-| Agregar comentario          | ✅ (propios)      | ✅       | ✅ (si asignado)| ❌         |
-| Derivar a otro técnico      | ❌                | ❌       | ✅ (si asignado)| ❌         |
-| Administrar usuarios        | ❌                | ❌       | ❌              | ✅         |
-| Administrar supervisiones   | ❌                | ❌       | ❌              | ✅         |
-| Recibir notificaciones      | ❌                | ❌       | ❌              | ✅         |
-
-## Documentación de arquitectura
-
-Los diagramas oficiales viven en [`docs/diagramas/`](docs/diagramas/README.md)
-(clases, casos de uso, flujo y secuencia, en Mermaid `.mmd` y visores HTML).
-El punto de entrada es la suite unificada
-[`docs/diagramas/diagrama_suite_unificada.html`](docs/diagramas/diagrama_suite_unificada.html),
-que se abre directamente en el navegador.
+Para visualizar la arquitectura completa con soporte de filtrado y simulación de escenarios, abre directamente en tu navegador:
+👉 **[`docs/diagramas/diagrama_suite_unificada.html`](docs/diagramas/diagrama_suite_unificada.html)**
