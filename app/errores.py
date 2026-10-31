@@ -8,7 +8,7 @@ cual y el `exception_handler` de `app/main.py` la traduce usando
 
 from fastapi import status
 
-from app.compartido.excepciones import DominioError
+from app.compartido.excepciones import DatoInvalidoError, DominioError
 from app.notificaciones.excepciones import NotificacionNoEncontradaError
 from app.requerimientos.excepciones import (
     NotaResolucionRequeridaError,
@@ -18,7 +18,7 @@ from app.requerimientos.excepciones import (
     TecnicoNoAsignadoError,
     TransicionInvalidaError,
 )
-from app.supervision.excepciones import RelacionYaExisteError
+from app.supervision.excepciones import RelacionYaExisteError, SupervisionNoPermitidaError
 from app.usuarios.excepciones import (
     CredencialesInvalidasError,
     EmailYaRegistradoError,
@@ -28,6 +28,8 @@ from app.usuarios.excepciones import (
 )
 
 _CODIGOS_HTTP: dict[type[DominioError], int] = {
+    # Mismo código que usa FastAPI cuando falla la validación de un DTO.
+    DatoInvalidoError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     PermisoDenegadoError: status.HTTP_403_FORBIDDEN,
     RequerimientoNoEncontradoError: status.HTTP_404_NOT_FOUND,
     UsuarioNoEncontradoError: status.HTTP_404_NOT_FOUND,
@@ -42,6 +44,7 @@ _CODIGOS_HTTP: dict[type[DominioError], int] = {
     UsuarioYaInactivoError: status.HTTP_409_CONFLICT,
     CredencialesInvalidasError: status.HTTP_401_UNAUTHORIZED,
     RelacionYaExisteError: status.HTTP_409_CONFLICT,
+    SupervisionNoPermitidaError: status.HTTP_403_FORBIDDEN,
     NotificacionNoEncontradaError: status.HTTP_404_NOT_FOUND,
 }
 

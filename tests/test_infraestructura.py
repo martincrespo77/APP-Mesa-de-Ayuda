@@ -28,6 +28,7 @@ from app.requerimientos.dominio.solicitud import CategoriaSolicitud, Solicitud
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
 from app.supervision.dominio import RelacionSupervision
 from app.usuarios.dominio import Usuario
+from tests.actores import nuevo_usuario, un_operador, un_solicitante, un_tecnico
 
 
 def _a_milisegundos(momento: datetime) -> datetime:
@@ -66,7 +67,7 @@ def repo_notificaciones(db: Database[dict[str, Any]]) -> RepositorioNotificacion
 
 @pytest.fixture
 def usuario() -> Usuario:
-    return Usuario(
+    return nuevo_usuario(
         nombre_completo="Ana Pérez",
         email="ana.perez@comunicarlos.com.ar",
         password_hash="hash-bcrypt-de-prueba",
@@ -97,7 +98,7 @@ class TestRepositorioUsuariosMongoGuardarYBuscar:
         self, repo_usuarios: RepositorioUsuariosMongo
     ) -> None:
         # Arrange
-        solicitante = Usuario(
+        solicitante = nuevo_usuario(
             nombre_completo="Sol",
             email="sol@gmail.com",
             password_hash="hash",
@@ -163,14 +164,14 @@ class TestRepositorioUsuariosMongoGuardarYBuscar:
         self, repo_usuarios: RepositorioUsuariosMongo
     ) -> None:
         # Arrange
-        usuario_a = Usuario(
+        usuario_a = nuevo_usuario(
             nombre_completo="A",
             email="a@comunicarlos.com",
             password_hash="hash-a",
             rol=RolUsuario.SOLICITANTE,
             servicios_suscriptos=frozenset({ServicioComunicarlos.TELEVISION}),
         )
-        usuario_b = Usuario(
+        usuario_b = nuevo_usuario(
             nombre_completo="B",
             email="b@comunicarlos.com.ar",
             password_hash="hash-b",
@@ -260,15 +261,13 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
     ) -> None:
         # Arrange: se avanza el incidente hasta EN_PROGRESO y se persiste en
         # cada paso, tal como haría ServicioRequerimientos._aplicar_transicion
-        tecnico_id = uuid.uuid4()
+        operador, tecnico = un_operador(), un_tecnico()
         repo_requerimientos.guardar(incidente)
-        incidente.iniciar_analisis(autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR)
+        incidente.iniciar_analisis(operador)
         repo_requerimientos.guardar(incidente)
-        incidente.asignar_tecnico(
-            tecnico_id, autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR
-        )
+        incidente.asignar_tecnico(tecnico, operador)
         repo_requerimientos.guardar(incidente)
-        incidente.iniciar_progreso(autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO)
+        incidente.iniciar_progreso(tecnico)
         repo_requerimientos.guardar(incidente)
 
         # Act
@@ -280,14 +279,12 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
         assert len(repo_requerimientos.listar_todos()) == 1
         assert encontrado is not None
         assert encontrado.estado == EstadoRequerimiento.EN_PROGRESO
-        assert encontrado.tecnico_asignado_id == tecnico_id
+        assert encontrado.tecnico_asignado_id == tecnico.id
         assert len(encontrado.historial) == 4  # creación + 3 transiciones
 
         # Act: sigue siendo un objeto de dominio operable (no un DTO muerto);
         # se resuelve, se persiste el cambio y se vuelve a leer
-        encontrado.resolver(
-            "Se reemplazó el ONT.", autor_id=tecnico_id, rol_actor=RolUsuario.TECNICO
-        )
+        encontrado.resolver("Se reemplazó el ONT.", tecnico)
         repo_requerimientos.guardar(encontrado)
         resuelto = repo_requerimientos.buscar_por_id(incidente.id)
 
@@ -371,9 +368,7 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
         solicitante_id: uuid.UUID,
     ) -> None:
         # Arrange
-        incidente.agregar_comentario(
-            "¿Alguna novedad?", autor_id=solicitante_id, rol_actor=RolUsuario.SOLICITANTE
-        )
+        incidente.agregar_comentario("¿Alguna novedad?", un_solicitante(id=solicitante_id))
 
         # Act
         repo_requerimientos.guardar(incidente)

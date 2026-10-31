@@ -14,7 +14,7 @@ from app.requerimientos.dominio.base import Requerimiento
 from app.requerimientos.repositorio import RepositorioRequerimientos
 from app.supervision.dominio import RelacionSupervision
 from app.supervision.repositorio import RepositorioSupervision
-from app.usuarios.dominio import Usuario
+from app.usuarios.dominio import Email, Usuario
 from app.usuarios.repositorio import RepositorioUsuarios
 
 
@@ -30,9 +30,9 @@ class FakeRepositorioUsuarios(RepositorioUsuarios):
     def buscar_por_id(self, usuario_id: uuid.UUID) -> Usuario | None:
         return self._usuarios.get(usuario_id)
 
-    def buscar_por_email(self, email: str) -> Usuario | None:
+    def buscar_por_email(self, email: Email) -> Usuario | None:
         for usuario in self._usuarios.values():
-            if usuario.email == email:
+            if usuario.email == str(email):
                 return usuario
         return None
 

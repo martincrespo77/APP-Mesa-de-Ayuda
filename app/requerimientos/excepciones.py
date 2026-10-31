@@ -30,9 +30,7 @@ class RequerimientoNoEncontradoError(RequerimientoError):
 class TecnicoInvalidoError(RequerimientoError):
     """Lanzada al asignar o derivar a un id que no es un Técnico activo existente.
 
-    La valida `ServicioRequerimientos`, no la entidad: `Requerimiento` es
-    dominio puro y no conoce el módulo de usuarios ni tiene acceso a
-    repositorios, así que no puede saber si un UUID corresponde a un
-    Técnico. Mismo criterio que `ServicioSupervision` con el rol del
-    supervisado.
+    La lanza `Requerimiento` cuando el destino contesta que no puede recibir
+    requerimientos (`usuario.puede_recibir_requerimientos()`), o el servicio
+    cuando el id ni siquiera existe en el repositorio.
     """

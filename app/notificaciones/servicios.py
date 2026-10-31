@@ -17,12 +17,13 @@ class ServicioNotificaciones:
         return self._repositorio.listar_por_supervisor(supervisor_id)
 
     def marcar_leida(self, notificacion_id: uuid.UUID, supervisor_id: uuid.UUID) -> Notificacion:
-        """Marca leída una notificación, exigiendo que pertenezca a ese supervisor."""
+        """Le pide a la notificación que se marque leída por ese supervisor
+        (ella valida que le pertenezca)."""
         notificacion = self._repositorio.buscar_por_id(notificacion_id)
-        if notificacion is None or notificacion.supervisor_id != supervisor_id:
+        if notificacion is None:
             raise NotificacionNoEncontradaError(
                 f"No existe una notificación con id '{notificacion_id}' para este supervisor."
             )
-        notificacion.marcar_leida()
+        notificacion.marcar_leida_por(supervisor_id)
         self._repositorio.guardar(notificacion)
         return notificacion

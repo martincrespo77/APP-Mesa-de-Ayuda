@@ -16,6 +16,7 @@ from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.deps import obtener_repositorio_usuarios
 from app.main import app
 from app.usuarios.dominio import Usuario
+from tests.actores import nuevo_usuario
 from tests.fakes import FakeRepositorioUsuarios
 from tests.lifespan import lifespan_vacio
 
@@ -41,7 +42,7 @@ def cliente(repositorio: FakeRepositorioUsuarios) -> Generator[TestClient, None,
 
 @pytest.fixture
 def supervisor(repositorio: FakeRepositorioUsuarios) -> Usuario:
-    supervisor = Usuario(
+    supervisor = nuevo_usuario(
         "Sofía Jefa",
         "sofia@comunicarlos.com.ar",
         obtener_password_hash(_PASSWORD_SUPERVISOR),
@@ -53,7 +54,7 @@ def supervisor(repositorio: FakeRepositorioUsuarios) -> Usuario:
 
 @pytest.fixture
 def tecnico(repositorio: FakeRepositorioUsuarios) -> Usuario:
-    tecnico = Usuario(
+    tecnico = nuevo_usuario(
         "Beto Técnico",
         "beto@comunicarlos.com.ar",
         obtener_password_hash(_PASSWORD_TECNICO),
@@ -341,14 +342,14 @@ class TestListarTecnicos:
         self, cliente: TestClient, repositorio: FakeRepositorioUsuarios, tecnico: Usuario
     ) -> None:
         # Arrange: un operador, un técnico de baja y un solicitante no deben figurar
-        operador = Usuario(
+        operador = nuevo_usuario(
             "Rosa Molina",
             "rosa@comunicarlos.com.ar",
             obtener_password_hash(_PASSWORD_SUPERVISOR),
             RolUsuario.OPERADOR,
         )
         repositorio.guardar(operador)
-        tecnico_de_baja = Usuario(
+        tecnico_de_baja = nuevo_usuario(
             "Ex Técnico", "ex@comunicarlos.com.ar", "hash", RolUsuario.TECNICO
         )
         tecnico_de_baja.desactivar()
@@ -388,7 +389,7 @@ class TestListarTecnicos:
         self, cliente: TestClient, repositorio: FakeRepositorioUsuarios
     ) -> None:
         # Arrange
-        solicitante = Usuario(
+        solicitante = nuevo_usuario(
             "Lucía Gómez",
             "lucia@mail.com",
             obtener_password_hash(_PASSWORD_SUPERVISOR),
@@ -477,6 +478,18 @@ class TestEmailCaseInsensitive:
         "password": "clave-segura-1",
         "servicios_suscriptos": ["TELEVISION"],
     }
+
+    @pytest.mark.parametrize("username", ["lucia@gmail", "admin", "   "])
+    def test_login_con_email_mal_formado_devuelve_401_y_no_500(
+        self, cliente: TestClient, username: str
+    ) -> None:
+        # Act: el email inválido se responde igual que uno inexistente
+        respuesta = cliente.post(
+            "/usuarios/login", data={"username": username, "password": "lo-que-sea"}
+        )
+
+        # Assert
+        assert respuesta.status_code == 401
 
     def test_login_con_otra_capitalizacion_funciona(self, cliente: TestClient) -> None:
         # Arrange

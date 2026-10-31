@@ -10,15 +10,11 @@ Se suscribe al mismo `DespachadorEventos` sin que `requerimientos` sepa que
 existe (Observer).
 """
 
-from app.compartido.dominio import RolUsuario
-from app.notificaciones.dominio import Notificacion
 from app.notificaciones.observador import ObservadorRequerimiento
 from app.notificaciones.repositorio import RepositorioNotificaciones
 from app.requerimientos.eventos import EventoRequerimiento
 from app.supervision.repositorio import RepositorioSupervision
 from app.usuarios.repositorio import RepositorioUsuarios
-
-_ROLES_SUPERVISABLES = frozenset({RolUsuario.OPERADOR, RolUsuario.TECNICO})
 
 
 class ObservadorNotificacionesMongo(ObservadorRequerimiento):
@@ -36,15 +32,7 @@ class ObservadorNotificacionesMongo(ObservadorRequerimiento):
 
     def actualizar(self, evento: EventoRequerimiento) -> None:
         autor = self._repositorio_usuarios.buscar_por_id(evento.autor_id)
-        if autor is None or autor.rol not in _ROLES_SUPERVISABLES:
+        if autor is None or not autor.es_supervisable():
             return
-        relaciones = self._repositorio_supervision.listar_supervisores_de(autor.id)
-        for relacion in relaciones:
-            notificacion = Notificacion(
-                supervisor_id=relacion.supervisor_id,
-                empleado_supervisado_id=autor.id,
-                requerimiento_id=evento.requerimiento_id,
-                tipo_evento=evento.tipo_evento,
-                detalle=evento.detalle,
-            )
-            self._repositorio_notificaciones.guardar(notificacion)
+        for relacion in self._repositorio_supervision.listar_supervisores_de(autor.id):
+            self._repositorio_notificaciones.guardar(relacion.notificar(evento))

@@ -31,7 +31,7 @@ from app.requerimientos.dominio.incidente import CategoriaIncidente, Incidente, 
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud, Solicitud
 from app.requerimientos.eventos import TipoEventoRequerimiento
 from app.supervision.dominio import RelacionSupervision
-from app.usuarios.dominio import Usuario
+from app.usuarios.dominio import FabricaUsuarios, Usuario
 
 _NAMESPACE_SEED = uuid.uuid5(uuid.NAMESPACE_DNS, "mesa-de-ayuda-comunicarlos.seed")
 _PASSWORD_SEED = "Seed1234!"
@@ -94,12 +94,12 @@ def _crear_usuarios() -> dict[str, Usuario]:
         ),
     )
     return {
-        clave: Usuario(
+        clave: FabricaUsuarios.crear(
+            rol,
             id=_id(clave),
             nombre_completo=nombre,
             email=email,
             password_hash=password_hash,
-            rol=rol,
             servicios_suscriptos=servicios,
         )
         for clave, nombre, email, rol, servicios in datos
@@ -110,10 +110,8 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
     """Incidentes y solicitudes cubriendo los 6 estados del ciclo de vida."""
     solicitante1 = usuarios["solicitante1"].id
     solicitante2 = usuarios["solicitante2"].id
-    operador_id = usuarios["operador1"].id
-    tecnico_id = usuarios["tecnico1"].id
-    operador = RolUsuario.OPERADOR
-    tecnico = RolUsuario.TECNICO
+    operador = usuarios["operador1"]
+    tecnico = usuarios["tecnico1"]
 
     incidente_abierto = Incidente(
         id=_id("incidente-abierto"),
@@ -136,7 +134,7 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
         pasos_reproduccion="Llamar y esperar 5 minutos.",
     )
-    incidente_en_analisis.iniciar_analisis(autor_id=operador_id, rol_actor=operador)
+    incidente_en_analisis.iniciar_analisis(operador)
 
     incidente_en_progreso = Incidente(
         id=_id("incidente-en-progreso"),
@@ -148,9 +146,9 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         servicio=ServicioComunicarlos.TELEVISION,
         pasos_reproduccion="Sintonizar cualquier canal HD.",
     )
-    incidente_en_progreso.iniciar_analisis(autor_id=operador_id, rol_actor=operador)
-    incidente_en_progreso.asignar_tecnico(tecnico_id, autor_id=operador_id, rol_actor=operador)
-    incidente_en_progreso.iniciar_progreso(autor_id=tecnico_id, rol_actor=tecnico)
+    incidente_en_progreso.iniciar_analisis(operador)
+    incidente_en_progreso.asignar_tecnico(tecnico, operador)
+    incidente_en_progreso.iniciar_progreso(tecnico)
 
     incidente_resuelto = Incidente(
         id=_id("incidente-resuelto"),
@@ -162,13 +160,11 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
         pasos_reproduccion="Verificar estado de la SIM en el sistema.",
     )
-    incidente_resuelto.iniciar_analisis(autor_id=operador_id, rol_actor=operador)
-    incidente_resuelto.asignar_tecnico(tecnico_id, autor_id=operador_id, rol_actor=operador)
-    incidente_resuelto.iniciar_progreso(autor_id=tecnico_id, rol_actor=tecnico)
+    incidente_resuelto.iniciar_analisis(operador)
+    incidente_resuelto.asignar_tecnico(tecnico, operador)
+    incidente_resuelto.iniciar_progreso(tecnico)
     incidente_resuelto.resolver(
-        "Se desbloqueó la SIM tras verificar identidad del titular.",
-        autor_id=tecnico_id,
-        rol_actor=tecnico,
+        "Se desbloqueó la SIM tras verificar identidad del titular.", tecnico
     )
 
     incidente_cerrado = Incidente(
@@ -181,13 +177,11 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         pasos_reproduccion="Revisar ONT y patchera.",
     )
-    incidente_cerrado.iniciar_analisis(autor_id=operador_id, rol_actor=operador)
-    incidente_cerrado.asignar_tecnico(tecnico_id, autor_id=operador_id, rol_actor=operador)
-    incidente_cerrado.iniciar_progreso(autor_id=tecnico_id, rol_actor=tecnico)
-    incidente_cerrado.resolver(
-        "Se empalmó la fibra cortada.", autor_id=tecnico_id, rol_actor=tecnico
-    )
-    incidente_cerrado.cerrar(autor_id=solicitante1, rol_actor=RolUsuario.SOLICITANTE)
+    incidente_cerrado.iniciar_analisis(operador)
+    incidente_cerrado.asignar_tecnico(tecnico, operador)
+    incidente_cerrado.iniciar_progreso(tecnico)
+    incidente_cerrado.resolver("Se empalmó la fibra cortada.", tecnico)
+    incidente_cerrado.cerrar(usuarios["solicitante1"])
 
     incidente_cancelado = Incidente(
         id=_id("incidente-cancelado"),
@@ -199,7 +193,7 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         servicio=ServicioComunicarlos.TELEVISION,
         pasos_reproduccion="N/A",
     )
-    incidente_cancelado.cancelar(autor_id=solicitante2, rol_actor=RolUsuario.SOLICITANTE)
+    incidente_cancelado.cancelar(usuarios["solicitante2"])
 
     solicitud_abierta = Solicitud(
         id=_id("solicitud-abierta"),
@@ -218,9 +212,9 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         categoria=CategoriaSolicitud.BAJA_SERVICIO,
         servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
     )
-    solicitud_en_progreso.iniciar_analisis(autor_id=operador_id, rol_actor=operador)
-    solicitud_en_progreso.asignar_tecnico(tecnico_id, autor_id=operador_id, rol_actor=operador)
-    solicitud_en_progreso.iniciar_progreso(autor_id=tecnico_id, rol_actor=tecnico)
+    solicitud_en_progreso.iniciar_analisis(operador)
+    solicitud_en_progreso.asignar_tecnico(tecnico, operador)
+    solicitud_en_progreso.iniciar_progreso(tecnico)
 
     return [
         incidente_abierto,

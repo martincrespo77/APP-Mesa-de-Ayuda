@@ -7,6 +7,7 @@ import pytest
 
 from app.notificaciones.despachador import DespachadorEventos
 from app.notificaciones.dominio import Notificacion
+from app.notificaciones.excepciones import NotificacionNoEncontradaError
 from app.notificaciones.observador import ObservadorRequerimiento
 from app.notificaciones.observador_logger import ObservadorLogger
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
@@ -150,3 +151,42 @@ class TestNotificacion:
         notificacion.marcar_leida()
         notificacion.marcar_leida()
         assert notificacion.leida is True
+
+    def test_sabe_a_que_supervisor_esta_dirigida(self) -> None:
+        # Arrange
+        supervisor_id = uuid.uuid4()
+        notificacion = _notificacion_para(supervisor_id)
+
+        # Assert
+        assert notificacion.es_para(supervisor_id)
+        assert not notificacion.es_para(uuid.uuid4())
+
+    def test_su_supervisor_puede_marcarla_leida(self) -> None:
+        # Arrange
+        supervisor_id = uuid.uuid4()
+        notificacion = _notificacion_para(supervisor_id)
+
+        # Act
+        notificacion.marcar_leida_por(supervisor_id)
+
+        # Assert
+        assert notificacion.leida is True
+
+    def test_otro_supervisor_no_puede_marcarla_leida(self) -> None:
+        # Arrange
+        notificacion = _notificacion_para(uuid.uuid4())
+
+        # Act & Assert: se reporta como inexistente, no como prohibida
+        with pytest.raises(NotificacionNoEncontradaError):
+            notificacion.marcar_leida_por(uuid.uuid4())
+        assert notificacion.leida is False
+
+
+def _notificacion_para(supervisor_id: uuid.UUID) -> Notificacion:
+    return Notificacion(
+        supervisor_id=supervisor_id,
+        empleado_supervisado_id=uuid.uuid4(),
+        requerimiento_id=uuid.uuid4(),
+        tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
+        detalle="Cambió de estado.",
+    )

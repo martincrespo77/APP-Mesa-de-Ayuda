@@ -9,7 +9,7 @@ el mismo contrato.
 import uuid
 from abc import ABC, abstractmethod
 
-from app.usuarios.dominio import Usuario
+from app.usuarios.dominio import Email, Usuario
 
 
 class RepositorioUsuarios(ABC):
@@ -24,8 +24,11 @@ class RepositorioUsuarios(ABC):
         """Devuelve el usuario con ese id, o `None` si no existe."""
 
     @abstractmethod
-    def buscar_por_email(self, email: str) -> Usuario | None:
-        """Devuelve el usuario con ese email (login), o `None` si no existe."""
+    def buscar_por_email(self, email: Email) -> Usuario | None:
+        """Devuelve el usuario con ese email (login), o `None` si no existe.
+
+        Recibe un `Email` (ya normalizado), nunca un `str` crudo: así ningún
+        llamador puede olvidarse de normalizar antes de buscar."""
 
     @abstractmethod
     def listar_todos(self) -> list[Usuario]:

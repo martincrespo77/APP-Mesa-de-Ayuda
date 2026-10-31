@@ -16,6 +16,7 @@ from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.deps import obtener_repositorio_supervision, obtener_repositorio_usuarios
 from app.main import app
 from app.usuarios.dominio import Usuario
+from tests.actores import nuevo_usuario
 from tests.fakes import FakeRepositorioSupervision, FakeRepositorioUsuarios
 from tests.lifespan import lifespan_vacio
 
@@ -52,7 +53,7 @@ def _crear_usuario(repo: FakeRepositorioUsuarios, email: str, rol: RolUsuario) -
         if rol == RolUsuario.SOLICITANTE
         else frozenset()
     )
-    usuario = Usuario(
+    usuario = nuevo_usuario(
         email.split("@")[0],
         email,
         obtener_password_hash(_PASSWORD),

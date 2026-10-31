@@ -1,16 +1,24 @@
 """Tests de servicios del módulo `app/requerimientos/`.
 
-Verifica la integración real entre `FakeRepositorioRequerimientos`,
-`FabricaRequerimientos`, la entidad `Requerimiento` y `DespachadorEventos`.
+Verifica la ORQUESTACIÓN entre `FakeRepositorioRequerimientos`,
+`FabricaRequerimientos`, las entidades y `DespachadorEventos`: que el
+servicio recupere lo necesario, delegue en el dominio, persista y notifique
+cada evento, y que valide lo que solo él puede saber (que un id exista).
+
+Las reglas de negocio (quién puede ver, asignar, derivar; a quién se le
+puede asignar un ticket) NO se prueban acá: son responsabilidad de
+`Requerimiento` y de cada rol de `Usuario`, y viven en
+`test_requerimientos_dominio.py` y `test_usuarios_dominio.py`.
 """
 
 import uuid
 
 import pytest
 
-from app.compartido.dominio import RolUsuario, ServicioComunicarlos
+from app.compartido.dominio import ServicioComunicarlos
 from app.notificaciones.despachador import DespachadorEventos
 from app.notificaciones.observador import ObservadorRequerimiento
+from app.requerimientos.dominio.base import Requerimiento
 from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerimiento
 from app.requerimientos.dominio.incidente import CategoriaIncidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud
@@ -21,7 +29,8 @@ from app.requerimientos.excepciones import (
     TecnicoInvalidoError,
 )
 from app.requerimientos.servicios import ServicioRequerimientos
-from app.usuarios.dominio import Usuario
+from app.usuarios.dominio import Operador, Solicitante, Tecnico
+from tests.actores import un_operador, un_solicitante, un_tecnico
 from tests.fakes import FakeRepositorioRequerimientos, FakeRepositorioUsuarios
 
 
@@ -55,39 +64,6 @@ def repo_usuarios() -> FakeRepositorioUsuarios:
     return FakeRepositorioUsuarios()
 
 
-def _alta_usuario(
-    repo: FakeRepositorioUsuarios, email: str, rol: RolUsuario, activo: bool = True
-) -> Usuario:
-    """Da de alta un usuario real en el repositorio fake.
-
-    `asignar_tecnico`/`derivar_interconsulta` ahora exigen que el destino
-    sea un Técnico activo existente, así que los tests ya no pueden pasar
-    un `uuid.uuid4()` suelto como id de técnico.
-    """
-    servicios = (
-        frozenset({ServicioComunicarlos.INTERNET_BANDA_ANCHA})
-        if rol == RolUsuario.SOLICITANTE
-        else frozenset()
-    )
-    usuario = Usuario(
-        email.split("@")[0], email, "hash-irrelevante", rol, servicios_suscriptos=servicios
-    )
-    if not activo:
-        usuario.desactivar()
-    repo.guardar(usuario)
-    return usuario
-
-
-@pytest.fixture
-def tecnico(repo_usuarios: FakeRepositorioUsuarios) -> Usuario:
-    return _alta_usuario(repo_usuarios, "ivan.rios@comunicarlos.com.ar", RolUsuario.TECNICO)
-
-
-@pytest.fixture
-def tecnico_destino(repo_usuarios: FakeRepositorioUsuarios) -> Usuario:
-    return _alta_usuario(repo_usuarios, "marta.suarez@comunicarlos.com.ar", RolUsuario.TECNICO)
-
-
 @pytest.fixture
 def servicio(
     repositorio: FakeRepositorioRequerimientos,
@@ -98,11 +74,33 @@ def servicio(
 
 
 @pytest.fixture
-def solicitante_id() -> uuid.UUID:
-    return uuid.uuid4()
+def solicitante() -> Solicitante:
+    return un_solicitante()
 
 
-def _crear_incidente(servicio: ServicioRequerimientos, solicitante_id: uuid.UUID):
+@pytest.fixture
+def operador() -> Operador:
+    return un_operador()
+
+
+@pytest.fixture
+def tecnico(repo_usuarios: FakeRepositorioUsuarios) -> Tecnico:
+    """Técnico dado de alta en el repositorio (el servicio lo busca por id)."""
+    tecnico = un_tecnico()
+    repo_usuarios.guardar(tecnico)
+    return tecnico
+
+
+@pytest.fixture
+def tecnico_destino(repo_usuarios: FakeRepositorioUsuarios) -> Tecnico:
+    tecnico = un_tecnico(email="marta.suarez@comunicarlos.com.ar")
+    repo_usuarios.guardar(tecnico)
+    return tecnico
+
+
+def _crear_incidente(
+    servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
+) -> Requerimiento:
     return servicio.crear(
         TipoRequerimiento.INCIDENTE,
         titulo="Corte de fibra",
@@ -120,33 +118,33 @@ class TestCrear:
         self,
         servicio: ServicioRequerimientos,
         repositorio: FakeRepositorioRequerimientos,
-        solicitante_id: uuid.UUID,
+        solicitante: Solicitante,
     ) -> None:
         # Act
-        requerimiento = _crear_incidente(servicio, solicitante_id)
+        requerimiento = _crear_incidente(servicio, solicitante.id)
 
         # Assert
         assert repositorio.buscar_por_id(requerimiento.id) is requerimiento
 
     def test_crear_notifica_el_evento_de_creacion_al_despachador(
-        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID, espia: _ObservadorEspia
+        self, servicio: ServicioRequerimientos, solicitante: Solicitante, espia: _ObservadorEspia
     ) -> None:
         # Act
-        _crear_incidente(servicio, solicitante_id)
+        _crear_incidente(servicio, solicitante.id)
 
         # Assert
         assert len(espia.eventos_recibidos) == 1
-        assert espia.eventos_recibidos[0].tipo_evento.value == "CREACION"
+        assert espia.eventos_recibidos[0].tipo_evento == TipoEventoRequerimiento.CREACION
 
     def test_crear_solicitud_via_fabrica(
-        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
+        self, servicio: ServicioRequerimientos, solicitante: Solicitante
     ) -> None:
         # Act
         requerimiento = servicio.crear(
             TipoRequerimiento.SOLICITUD,
             titulo="Alta de servicio",
             descripcion="Nueva conexión residencial.",
-            solicitante_id=solicitante_id,
+            solicitante_id=solicitante.id,
             categoria=CategoriaSolicitud.ALTA_SERVICIO,
             servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         )
@@ -162,76 +160,49 @@ class TestConsultas:
         # Act & Assert
         assert servicio.obtener_por_id(uuid.uuid4()) is None
 
-    def test_solicitante_solo_ve_sus_propios_requerimientos(
-        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
+    def test_listar_visibles_devuelve_lo_que_el_actor_dice_que_puede_ver(
+        self, servicio: ServicioRequerimientos, solicitante: Solicitante, operador: Operador
     ) -> None:
         # Arrange
-        propio = _crear_incidente(servicio, solicitante_id)
+        propio = _crear_incidente(servicio, solicitante.id)
         _crear_incidente(servicio, uuid.uuid4())  # de otro solicitante
 
         # Act
-        visibles = servicio.listar_visibles_para(RolUsuario.SOLICITANTE, solicitante_id)
+        visibles_para_solicitante = servicio.listar_visibles_para(solicitante)
+        visibles_para_operador = servicio.listar_visibles_para(operador)
 
-        # Assert
-        assert [r.id for r in visibles] == [propio.id]
+        # Assert: el servicio no decide, filtra con `actor.puede_ver(...)`
+        assert [r.id for r in visibles_para_solicitante] == [propio.id]
+        assert len(visibles_para_operador) == 2
 
-    def test_operador_ve_todos_los_requerimientos(
-        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
+    def test_obtener_visible_devuelve_el_requerimiento(
+        self, servicio: ServicioRequerimientos, solicitante: Solicitante
     ) -> None:
         # Arrange
-        _crear_incidente(servicio, solicitante_id)
-        _crear_incidente(servicio, uuid.uuid4())
+        propio = _crear_incidente(servicio, solicitante.id)
 
         # Act
-        visibles = servicio.listar_visibles_para(RolUsuario.OPERADOR, solicitante_id)
-
-        # Assert
-        assert len(visibles) == 2
-
-
-class TestObtenerVisiblePara:
-    def test_solicitante_puede_ver_su_propio_requerimiento(
-        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
-    ) -> None:
-        # Arrange
-        propio = _crear_incidente(servicio, solicitante_id)
-
-        # Act
-        encontrado = servicio.obtener_visible_para(
-            propio.id, RolUsuario.SOLICITANTE, solicitante_id
-        )
+        encontrado = servicio.obtener_visible_para(propio.id, solicitante)
 
         # Assert
         assert encontrado.id == propio.id
 
-    def test_solicitante_no_puede_ver_un_requerimiento_ajeno(
-        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
+    def test_obtener_visible_propaga_el_rechazo_del_dominio(
+        self, servicio: ServicioRequerimientos, solicitante: Solicitante
     ) -> None:
         # Arrange
         ajeno = _crear_incidente(servicio, uuid.uuid4())
 
         # Act & Assert
         with pytest.raises(PermisoDenegadoError):
-            servicio.obtener_visible_para(ajeno.id, RolUsuario.SOLICITANTE, solicitante_id)
+            servicio.obtener_visible_para(ajeno.id, solicitante)
 
-    def test_operador_puede_ver_cualquier_requerimiento(
-        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
-    ) -> None:
-        # Arrange
-        ajeno = _crear_incidente(servicio, uuid.uuid4())
-
-        # Act
-        encontrado = servicio.obtener_visible_para(ajeno.id, RolUsuario.OPERADOR, solicitante_id)
-
-        # Assert
-        assert encontrado.id == ajeno.id
-
-    def test_id_inexistente_lanza_requerimiento_no_encontrado(
-        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
+    def test_obtener_visible_con_id_inexistente_lanza_no_encontrado(
+        self, servicio: ServicioRequerimientos, operador: Operador
     ) -> None:
         # Act & Assert
         with pytest.raises(RequerimientoNoEncontradoError):
-            servicio.obtener_visible_para(uuid.uuid4(), RolUsuario.OPERADOR, solicitante_id)
+            servicio.obtener_visible_para(uuid.uuid4(), operador)
 
 
 class TestTransicionesViaServicio:
@@ -239,16 +210,15 @@ class TestTransicionesViaServicio:
         self,
         servicio: ServicioRequerimientos,
         repositorio: FakeRepositorioRequerimientos,
-        solicitante_id: uuid.UUID,
+        solicitante: Solicitante,
+        operador: Operador,
         espia: _ObservadorEspia,
     ) -> None:
         # Arrange
-        requerimiento = _crear_incidente(servicio, solicitante_id)
+        requerimiento = _crear_incidente(servicio, solicitante.id)
 
         # Act
-        servicio.iniciar_analisis(
-            requerimiento.id, autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR
-        )
+        servicio.iniciar_analisis(requerimiento.id, operador)
 
         # Assert
         persistido = repositorio.buscar_por_id(requerimiento.id)
@@ -257,32 +227,46 @@ class TestTransicionesViaServicio:
         assert len(espia.eventos_recibidos) == 2  # creación + cambio de estado
 
     def test_transicion_sobre_id_inexistente_lanza_requerimiento_no_encontrado(
-        self, servicio: ServicioRequerimientos
+        self, servicio: ServicioRequerimientos, operador: Operador
     ) -> None:
         # Act & Assert
         with pytest.raises(RequerimientoNoEncontradoError):
-            servicio.iniciar_analisis(
-                uuid.uuid4(), autor_id=uuid.uuid4(), rol_actor=RolUsuario.OPERADOR
-            )
+            servicio.iniciar_analisis(uuid.uuid4(), operador)
+
+    def test_transicion_rechazada_por_el_dominio_no_notifica(
+        self,
+        servicio: ServicioRequerimientos,
+        solicitante: Solicitante,
+        espia: _ObservadorEspia,
+    ) -> None:
+        # Arrange
+        requerimiento = _crear_incidente(servicio, solicitante.id)
+
+        # Act: el error de dominio se propaga tal cual
+        with pytest.raises(PermisoDenegadoError):
+            servicio.iniciar_analisis(requerimiento.id, solicitante)
+
+        # Assert: solo se notificó la creación
+        assert len(espia.eventos_recibidos) == 1
 
     def test_flujo_completo_hasta_cierre_a_traves_del_servicio(
         self,
         servicio: ServicioRequerimientos,
         repositorio: FakeRepositorioRequerimientos,
-        solicitante_id: uuid.UUID,
+        solicitante: Solicitante,
+        operador: Operador,
         espia: _ObservadorEspia,
-        tecnico: Usuario,
+        tecnico: Tecnico,
     ) -> None:
         # Arrange
-        requerimiento = _crear_incidente(servicio, solicitante_id)
-        tecnico_id = tecnico.id
+        requerimiento = _crear_incidente(servicio, solicitante.id)
 
         # Act
-        servicio.iniciar_analisis(requerimiento.id, uuid.uuid4(), RolUsuario.OPERADOR)
-        servicio.asignar_tecnico(requerimiento.id, tecnico_id, uuid.uuid4(), RolUsuario.OPERADOR)
-        servicio.iniciar_progreso(requerimiento.id, tecnico_id, RolUsuario.TECNICO)
-        servicio.resolver(requerimiento.id, "ONT reemplazado.", tecnico_id, RolUsuario.TECNICO)
-        servicio.cerrar(requerimiento.id, solicitante_id, RolUsuario.SOLICITANTE)
+        servicio.iniciar_analisis(requerimiento.id, operador)
+        servicio.asignar_tecnico(requerimiento.id, tecnico.id, operador)
+        servicio.iniciar_progreso(requerimiento.id, tecnico)
+        servicio.resolver(requerimiento.id, "ONT reemplazado.", tecnico)
+        servicio.cerrar(requerimiento.id, solicitante)
 
         # Assert
         persistido = repositorio.buscar_por_id(requerimiento.id)
@@ -296,16 +280,14 @@ class TestComentariosYDerivacionViaServicio:
         self,
         servicio: ServicioRequerimientos,
         repositorio: FakeRepositorioRequerimientos,
-        solicitante_id: uuid.UUID,
+        solicitante: Solicitante,
         espia: _ObservadorEspia,
     ) -> None:
         # Arrange
-        requerimiento = _crear_incidente(servicio, solicitante_id)
+        requerimiento = _crear_incidente(servicio, solicitante.id)
 
         # Act
-        comentario = servicio.agregar_comentario(
-            requerimiento.id, "¿Alguna novedad?", solicitante_id, RolUsuario.SOLICITANTE
-        )
+        comentario = servicio.agregar_comentario(requerimiento.id, "¿Alguna novedad?", solicitante)
 
         # Assert
         persistido = repositorio.buscar_por_id(requerimiento.id)
@@ -316,23 +298,21 @@ class TestComentariosYDerivacionViaServicio:
     def test_agregar_comentario_que_reabre_notifica_los_dos_eventos_nuevos(
         self,
         servicio: ServicioRequerimientos,
-        solicitante_id: uuid.UUID,
+        solicitante: Solicitante,
+        operador: Operador,
         espia: _ObservadorEspia,
-        tecnico: Usuario,
+        tecnico: Tecnico,
     ) -> None:
         # Arrange: lleva el incidente hasta RESUELTO
-        requerimiento = _crear_incidente(servicio, solicitante_id)
-        tecnico_id = tecnico.id
-        servicio.iniciar_analisis(requerimiento.id, uuid.uuid4(), RolUsuario.OPERADOR)
-        servicio.asignar_tecnico(requerimiento.id, tecnico_id, uuid.uuid4(), RolUsuario.OPERADOR)
-        servicio.iniciar_progreso(requerimiento.id, tecnico_id, RolUsuario.TECNICO)
-        servicio.resolver(requerimiento.id, "Nota.", tecnico_id, RolUsuario.TECNICO)
+        requerimiento = _crear_incidente(servicio, solicitante.id)
+        servicio.iniciar_analisis(requerimiento.id, operador)
+        servicio.asignar_tecnico(requerimiento.id, tecnico.id, operador)
+        servicio.iniciar_progreso(requerimiento.id, tecnico)
+        servicio.resolver(requerimiento.id, "Nota.", tecnico)
         cantidad_previa = len(espia.eventos_recibidos)
 
         # Act
-        servicio.agregar_comentario(
-            requerimiento.id, "No quedó resuelto.", uuid.uuid4(), RolUsuario.OPERADOR
-        )
+        servicio.agregar_comentario(requerimiento.id, "No quedó resuelto.", operador)
 
         # Assert: se despacharon COMENTARIO y REAPERTURA, no solo el último
         eventos_nuevos = espia.eventos_recibidos[cantidad_previa:]
@@ -345,149 +325,82 @@ class TestComentariosYDerivacionViaServicio:
         self,
         servicio: ServicioRequerimientos,
         repositorio: FakeRepositorioRequerimientos,
-        solicitante_id: uuid.UUID,
-        tecnico: Usuario,
-        tecnico_destino: Usuario,
+        solicitante: Solicitante,
+        operador: Operador,
+        tecnico: Tecnico,
+        tecnico_destino: Tecnico,
     ) -> None:
         # Arrange
-        requerimiento = _crear_incidente(servicio, solicitante_id)
-        tecnico_origen_id = tecnico.id
-        tecnico_destino_id = tecnico_destino.id
-        servicio.iniciar_analisis(requerimiento.id, uuid.uuid4(), RolUsuario.OPERADOR)
-        servicio.asignar_tecnico(
-            requerimiento.id, tecnico_origen_id, uuid.uuid4(), RolUsuario.OPERADOR
-        )
+        requerimiento = _crear_incidente(servicio, solicitante.id)
+        servicio.iniciar_analisis(requerimiento.id, operador)
+        servicio.asignar_tecnico(requerimiento.id, tecnico.id, operador)
 
         # Act
-        servicio.derivar_interconsulta(
-            requerimiento.id, tecnico_destino_id, tecnico_origen_id, RolUsuario.TECNICO
-        )
+        servicio.derivar_interconsulta(requerimiento.id, tecnico_destino.id, tecnico)
 
         # Assert
         persistido = repositorio.buscar_por_id(requerimiento.id)
         assert persistido is not None
-        assert persistido.tecnico_asignado_id == tecnico_destino_id
+        assert persistido.tecnico_asignado_id == tecnico_destino.id
 
 
-class TestValidacionDelTecnicoDestino:
-    """`asignar_tecnico` y `derivar_interconsulta` solo aceptan Técnicos activos.
-
-    La entidad no puede validarlo (dominio puro, sin acceso a usuarios), así
-    que la regla vive en el servicio. Sin ella, un ticket puede quedar
-    "asignado" a un Solicitante o a un UUID inexistente y salirse del
-    circuito técnico: el asignado no puede iniciar progreso ni derivar.
-    """
-
-    def _en_analisis(
-        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
-    ) -> uuid.UUID:
-        requerimiento = _crear_incidente(servicio, solicitante_id)
-        servicio.iniciar_analisis(requerimiento.id, uuid.uuid4(), RolUsuario.OPERADOR)
-        return requerimiento.id
+class TestBusquedaDelTecnicoDestino:
+    """El servicio solo valida que el id del técnico EXISTA (eso requiere al
+    repositorio). Si ese usuario puede o no recibir el ticket lo decide el
+    dominio: ver `test_requerimientos_dominio.py::TestTecnicoDestino`."""
 
     def test_asignar_a_un_id_inexistente_lanza_tecnico_invalido(
-        self, servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
-    ) -> None:
-        # Arrange
-        requerimiento_id = self._en_analisis(servicio, solicitante_id)
-
-        # Act & Assert
-        with pytest.raises(TecnicoInvalidoError):
-            servicio.asignar_tecnico(
-                requerimiento_id, uuid.uuid4(), uuid.uuid4(), RolUsuario.OPERADOR
-            )
-
-    def test_asignar_a_un_solicitante_lanza_tecnico_invalido(
-        self,
-        servicio: ServicioRequerimientos,
-        repo_usuarios: FakeRepositorioUsuarios,
-        solicitante_id: uuid.UUID,
-    ) -> None:
-        # Arrange: un usuario real, pero con rol SOLICITANTE
-        no_tecnico = _alta_usuario(repo_usuarios, "lucia.gomez@mail.com", RolUsuario.SOLICITANTE)
-        requerimiento_id = self._en_analisis(servicio, solicitante_id)
-
-        # Act & Assert
-        with pytest.raises(TecnicoInvalidoError):
-            servicio.asignar_tecnico(
-                requerimiento_id, no_tecnico.id, uuid.uuid4(), RolUsuario.OPERADOR
-            )
-
-    def test_asignar_a_un_tecnico_desactivado_lanza_tecnico_invalido(
-        self,
-        servicio: ServicioRequerimientos,
-        repo_usuarios: FakeRepositorioUsuarios,
-        solicitante_id: uuid.UUID,
-    ) -> None:
-        # Arrange
-        de_baja = _alta_usuario(
-            repo_usuarios, "egresado@comunicarlos.com.ar", RolUsuario.TECNICO, activo=False
-        )
-        requerimiento_id = self._en_analisis(servicio, solicitante_id)
-
-        # Act & Assert
-        with pytest.raises(TecnicoInvalidoError):
-            servicio.asignar_tecnico(
-                requerimiento_id, de_baja.id, uuid.uuid4(), RolUsuario.OPERADOR
-            )
-
-    def test_asignar_no_muta_el_requerimiento_si_el_destino_es_invalido(
         self,
         servicio: ServicioRequerimientos,
         repositorio: FakeRepositorioRequerimientos,
-        solicitante_id: uuid.UUID,
+        solicitante: Solicitante,
+        operador: Operador,
     ) -> None:
         # Arrange
-        requerimiento_id = self._en_analisis(servicio, solicitante_id)
+        requerimiento = _crear_incidente(servicio, solicitante.id)
+        servicio.iniciar_analisis(requerimiento.id, operador)
 
-        # Act
+        # Act & Assert
         with pytest.raises(TecnicoInvalidoError):
-            servicio.asignar_tecnico(
-                requerimiento_id, uuid.uuid4(), uuid.uuid4(), RolUsuario.OPERADOR
-            )
-
-        # Assert: se rechaza ANTES de tocar la entidad
-        persistido = repositorio.buscar_por_id(requerimiento_id)
+            servicio.asignar_tecnico(requerimiento.id, uuid.uuid4(), operador)
+        persistido = repositorio.buscar_por_id(requerimiento.id)
         assert persistido is not None
         assert persistido.tecnico_asignado_id is None
-        assert persistido.estado == EstadoRequerimiento.EN_ANALISIS
 
     def test_derivar_a_un_id_inexistente_lanza_tecnico_invalido(
         self,
         servicio: ServicioRequerimientos,
-        solicitante_id: uuid.UUID,
-        tecnico: Usuario,
+        solicitante: Solicitante,
+        operador: Operador,
+        tecnico: Tecnico,
     ) -> None:
         # Arrange
-        requerimiento_id = self._en_analisis(servicio, solicitante_id)
-        servicio.asignar_tecnico(requerimiento_id, tecnico.id, uuid.uuid4(), RolUsuario.OPERADOR)
+        requerimiento = _crear_incidente(servicio, solicitante.id)
+        servicio.iniciar_analisis(requerimiento.id, operador)
+        servicio.asignar_tecnico(requerimiento.id, tecnico.id, operador)
 
         # Act & Assert
         with pytest.raises(TecnicoInvalidoError):
-            servicio.derivar_interconsulta(
-                requerimiento_id, uuid.uuid4(), tecnico.id, RolUsuario.TECNICO
-            )
+            servicio.derivar_interconsulta(requerimiento.id, uuid.uuid4(), tecnico)
 
-    def test_derivar_a_un_no_tecnico_lanza_tecnico_invalido(
+    def test_si_el_dominio_rechaza_el_destino_no_se_persiste_el_cambio(
         self,
         servicio: ServicioRequerimientos,
         repositorio: FakeRepositorioRequerimientos,
         repo_usuarios: FakeRepositorioUsuarios,
-        solicitante_id: uuid.UUID,
-        tecnico: Usuario,
+        solicitante: Solicitante,
+        operador: Operador,
+        tecnico: Tecnico,
     ) -> None:
-        # Arrange
-        operador = _alta_usuario(repo_usuarios, "rosa@comunicarlos.com.ar", RolUsuario.OPERADOR)
-        requerimiento_id = self._en_analisis(servicio, solicitante_id)
-        servicio.asignar_tecnico(requerimiento_id, tecnico.id, uuid.uuid4(), RolUsuario.OPERADOR)
+        # Arrange: el destino existe, pero el dominio no lo acepta (no es Técnico)
+        repo_usuarios.guardar(operador)
+        requerimiento = _crear_incidente(servicio, solicitante.id)
+        servicio.iniciar_analisis(requerimiento.id, operador)
+        servicio.asignar_tecnico(requerimiento.id, tecnico.id, operador)
 
         # Act & Assert
         with pytest.raises(TecnicoInvalidoError):
-            servicio.derivar_interconsulta(
-                requerimiento_id, operador.id, tecnico.id, RolUsuario.TECNICO
-            )
-
-        # El técnico original sigue asignado: la derivación no se aplicó
-        persistido = repositorio.buscar_por_id(requerimiento_id)
+            servicio.derivar_interconsulta(requerimiento.id, operador.id, tecnico)
+        persistido = repositorio.buscar_por_id(requerimiento.id)
         assert persistido is not None
         assert persistido.tecnico_asignado_id == tecnico.id

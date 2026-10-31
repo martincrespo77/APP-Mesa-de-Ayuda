@@ -10,6 +10,7 @@ queda como registro permanente: no se borra.
 import uuid
 from datetime import UTC, datetime
 
+from app.notificaciones.excepciones import NotificacionNoEncontradaError
 from app.requerimientos.eventos import TipoEventoRequerimiento
 
 
@@ -40,6 +41,23 @@ class Notificacion:
     def leida(self) -> bool:
         return self._leida
 
+    def es_para(self, supervisor_id: uuid.UUID) -> bool:
+        """¿Esta notificación está dirigida a `supervisor_id`?"""
+        return self.supervisor_id == supervisor_id
+
     def marcar_leida(self) -> None:
         """Idempotente: marcar una notificación ya leída no falla ni cambia nada."""
         self._leida = True
+
+    def marcar_leida_por(self, supervisor_id: uuid.UUID) -> None:
+        """Marca leída la notificación, si es de `supervisor_id`.
+
+        Una notificación ajena se reporta como inexistente (no como
+        "prohibida"): un supervisor no debe poder enterarse de que existe
+        un aviso dirigido a otro.
+        """
+        if not self.es_para(supervisor_id):
+            raise NotificacionNoEncontradaError(
+                f"No existe una notificación con id '{self.id}' para este supervisor."
+            )
+        self.marcar_leida()

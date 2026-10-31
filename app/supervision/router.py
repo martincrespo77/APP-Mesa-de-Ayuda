@@ -1,17 +1,16 @@
 """Endpoints FastAPI del módulo de supervisión.
 
-Todos los endpoints están gateados con `requerir_rol(SUPERVISOR)`: no hay
-contraparte de dominio para "quién puede administrar supervisiones" (es
-pura administración de cuentas, igual que el resto de `usuarios/router.py`),
-así que se centraliza acá en vez de duplicarlo en la entidad.
+Todos los endpoints están gateados preguntándole al usuario actual
+`puede_administrar_supervisiones()` (solo el `Supervisor` contesta que sí).
+Además, crear la relación es `supervisor.supervisar(empleado)`: aunque el
+gate faltara, un usuario que no es Supervisor no podría supervisar.
 """
 
 import uuid
 
 from fastapi import APIRouter, Depends, status
 
-from app.compartido.dominio import RolUsuario
-from app.deps import obtener_servicio_supervision, obtener_usuario_actual, requerir_rol
+from app.deps import obtener_servicio_supervision, obtener_usuario_actual, requerir_permiso
 from app.supervision.schemas import AsignarSupervisionRequest, RelacionSupervisionResponse
 from app.supervision.servicios import ServicioSupervision
 from app.usuarios.dominio import Usuario
@@ -19,7 +18,7 @@ from app.usuarios.dominio import Usuario
 router = APIRouter(
     prefix="/supervisiones",
     tags=["supervision"],
-    dependencies=[Depends(requerir_rol(RolUsuario.SUPERVISOR))],
+    dependencies=[Depends(requerir_permiso(lambda u: u.puede_administrar_supervisiones()))],
 )
 
 
@@ -30,7 +29,7 @@ def asignar_supervision(
     servicio: ServicioSupervision = Depends(obtener_servicio_supervision),
 ) -> RelacionSupervisionResponse:
     """Asigna al Supervisor autenticado como supervisor del `supervisado_id` dado."""
-    relacion = servicio.asignar(usuario_actual.id, datos.supervisado_id)
+    relacion = servicio.asignar(usuario_actual, datos.supervisado_id)
     return RelacionSupervisionResponse.model_validate(relacion)
 
 

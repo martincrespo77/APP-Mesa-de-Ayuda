@@ -30,6 +30,7 @@ from app.notificaciones.dominio import Notificacion
 from app.requerimientos.eventos import TipoEventoRequerimiento
 from app.supervision.dominio import RelacionSupervision
 from app.usuarios.dominio import Usuario
+from tests.actores import nuevo_usuario
 from tests.fakes import (
     FakeRepositorioNotificaciones,
     FakeRepositorioRequerimientos,
@@ -71,7 +72,7 @@ def _crear_usuario(repo: FakeRepositorioUsuarios, email: str, rol: RolUsuario) -
         if rol == RolUsuario.SOLICITANTE
         else frozenset()
     )
-    usuario = Usuario(
+    usuario = nuevo_usuario(
         email.split("@")[0],
         email,
         obtener_password_hash(_PASSWORD),

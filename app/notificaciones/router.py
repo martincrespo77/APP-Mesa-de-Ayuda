@@ -1,6 +1,7 @@
 """Endpoints FastAPI del módulo de notificaciones.
 
-Gateados con `requerir_rol(SUPERVISOR)`: son las únicas destinatarias de
+Gateados preguntándole al usuario actual `recibe_notificaciones()` (solo
+el `Supervisor` contesta que sí): es el único destinatario de
 `Notificacion` (ver `app/infraestructura/observador_notificaciones.py`).
 """
 
@@ -8,8 +9,7 @@ import uuid
 
 from fastapi import APIRouter, Depends
 
-from app.compartido.dominio import RolUsuario
-from app.deps import obtener_servicio_notificaciones, obtener_usuario_actual, requerir_rol
+from app.deps import obtener_servicio_notificaciones, obtener_usuario_actual, requerir_permiso
 from app.notificaciones.schemas import NotificacionResponse
 from app.notificaciones.servicios import ServicioNotificaciones
 from app.usuarios.dominio import Usuario
@@ -17,7 +17,7 @@ from app.usuarios.dominio import Usuario
 router = APIRouter(
     prefix="/notificaciones",
     tags=["notificaciones"],
-    dependencies=[Depends(requerir_rol(RolUsuario.SUPERVISOR))],
+    dependencies=[Depends(requerir_permiso(lambda u: u.recibe_notificaciones()))],
 )
 
 

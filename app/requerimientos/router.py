@@ -1,10 +1,11 @@
 """Endpoints FastAPI del módulo de requerimientos.
 
-Ninguna transición usa `requerir_rol(...)`: la propia entidad `Requerimiento`
-ya valida el rol/identidad del actor (Information Expert, Paso 2) y lanza
-`PermisoDenegadoError`, traducida a HTTP 403 por el exception handler de
-`app/main.py`. Duplicar el chequeo aquí repetiría la misma regla de
-negocio en dos capas.
+Ninguna transición usa `requerir_permiso(...)`: cada endpoint le pasa al
+servicio el `Usuario` autenticado completo, y es la propia entidad
+`Requerimiento` la que le pregunta si puede ejecutar la transición
+(double dispatch) y lanza `PermisoDenegadoError`, traducida a HTTP 403 por
+el exception handler de `app/main.py`. Duplicar el chequeo aquí repetiría
+la misma regla de negocio en dos capas.
 """
 
 import uuid
@@ -76,7 +77,7 @@ def listar_requerimientos(
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> list[IncidenteResponse | SolicitudResponse]:
     """Aplica la visibilidad de la matriz de roles (Solicitante ve solo lo propio)."""
-    visibles = servicio.listar_visibles_para(usuario_actual.rol, usuario_actual.id)
+    visibles = servicio.listar_visibles_para(usuario_actual)
     return [_a_respuesta(req) for req in visibles]
 
 
@@ -89,9 +90,7 @@ def obtener_requerimiento(
     """Exige autenticación y aplica la misma visibilidad que el listado: un
     Solicitante no puede consultar el requerimiento de otro (fix de
     seguridad: antes este endpoint no exigía ni auth ni propiedad)."""
-    requerimiento = servicio.obtener_visible_para(
-        requerimiento_id, usuario_actual.rol, usuario_actual.id
-    )
+    requerimiento = servicio.obtener_visible_para(requerimiento_id, usuario_actual)
     return _a_respuesta(requerimiento)
 
 
@@ -101,9 +100,7 @@ def iniciar_analisis(
     usuario_actual: Usuario = Depends(obtener_usuario_actual),
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> IncidenteResponse | SolicitudResponse:
-    requerimiento = servicio.iniciar_analisis(
-        requerimiento_id, usuario_actual.id, usuario_actual.rol
-    )
+    requerimiento = servicio.iniciar_analisis(requerimiento_id, usuario_actual)
     return _a_respuesta(requerimiento)
 
 
@@ -114,9 +111,7 @@ def asignar_tecnico(
     usuario_actual: Usuario = Depends(obtener_usuario_actual),
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> IncidenteResponse | SolicitudResponse:
-    requerimiento = servicio.asignar_tecnico(
-        requerimiento_id, datos.tecnico_id, usuario_actual.id, usuario_actual.rol
-    )
+    requerimiento = servicio.asignar_tecnico(requerimiento_id, datos.tecnico_id, usuario_actual)
     return _a_respuesta(requerimiento)
 
 
@@ -126,9 +121,7 @@ def iniciar_progreso(
     usuario_actual: Usuario = Depends(obtener_usuario_actual),
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> IncidenteResponse | SolicitudResponse:
-    requerimiento = servicio.iniciar_progreso(
-        requerimiento_id, usuario_actual.id, usuario_actual.rol
-    )
+    requerimiento = servicio.iniciar_progreso(requerimiento_id, usuario_actual)
     return _a_respuesta(requerimiento)
 
 
@@ -139,9 +132,7 @@ def resolver(
     usuario_actual: Usuario = Depends(obtener_usuario_actual),
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> IncidenteResponse | SolicitudResponse:
-    requerimiento = servicio.resolver(
-        requerimiento_id, datos.nota_resolucion, usuario_actual.id, usuario_actual.rol
-    )
+    requerimiento = servicio.resolver(requerimiento_id, datos.nota_resolucion, usuario_actual)
     return _a_respuesta(requerimiento)
 
 
@@ -151,7 +142,7 @@ def cerrar(
     usuario_actual: Usuario = Depends(obtener_usuario_actual),
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> IncidenteResponse | SolicitudResponse:
-    requerimiento = servicio.cerrar(requerimiento_id, usuario_actual.id, usuario_actual.rol)
+    requerimiento = servicio.cerrar(requerimiento_id, usuario_actual)
     return _a_respuesta(requerimiento)
 
 
@@ -161,7 +152,7 @@ def cancelar(
     usuario_actual: Usuario = Depends(obtener_usuario_actual),
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> IncidenteResponse | SolicitudResponse:
-    requerimiento = servicio.cancelar(requerimiento_id, usuario_actual.id, usuario_actual.rol)
+    requerimiento = servicio.cancelar(requerimiento_id, usuario_actual)
     return _a_respuesta(requerimiento)
 
 
@@ -174,9 +165,7 @@ def agregar_comentario(
     usuario_actual: Usuario = Depends(obtener_usuario_actual),
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> ComentarioResponse:
-    comentario = servicio.agregar_comentario(
-        requerimiento_id, datos.texto, usuario_actual.id, usuario_actual.rol
-    )
+    comentario = servicio.agregar_comentario(requerimiento_id, datos.texto, usuario_actual)
     return ComentarioResponse.model_validate(comentario)
 
 
@@ -188,6 +177,6 @@ def derivar_interconsulta(
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> IncidenteResponse | SolicitudResponse:
     requerimiento = servicio.derivar_interconsulta(
-        requerimiento_id, datos.tecnico_destino_id, usuario_actual.id, usuario_actual.rol
+        requerimiento_id, datos.tecnico_destino_id, usuario_actual
     )
     return _a_respuesta(requerimiento)

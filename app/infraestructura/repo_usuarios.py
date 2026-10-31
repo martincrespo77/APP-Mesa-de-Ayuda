@@ -7,8 +7,8 @@ ve ese `_id`, solo su propio `usuario.id`.
 
 `Usuario.__init__` no tiene efectos colaterales (a diferencia de
 `Requerimiento`, que registra un evento `CREACION`), así que reconstruir
-una instancia desde un documento reutiliza el constructor normal sin
-necesidad de un método de reconstrucción dedicado.
+una instancia desde un documento reutiliza el constructor normal vía
+`FabricaUsuarios`, que traduce el campo `rol` a la subclase concreta.
 """
 
 import uuid
@@ -20,7 +20,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.infraestructura.database import COLECCION_USUARIOS
-from app.usuarios.dominio import Usuario
+from app.usuarios.dominio import Email, FabricaUsuarios, Usuario
 from app.usuarios.excepciones import EmailYaRegistradoError
 from app.usuarios.repositorio import RepositorioUsuarios
 
@@ -54,8 +54,8 @@ class RepositorioUsuariosMongo(RepositorioUsuarios):
         documento = self._coleccion.find_one({"_id": str(usuario_id)})
         return _a_dominio(documento) if documento is not None else None
 
-    def buscar_por_email(self, email: str) -> Usuario | None:
-        documento = self._coleccion.find_one({"email": email})
+    def buscar_por_email(self, email: Email) -> Usuario | None:
+        documento = self._coleccion.find_one({"email": str(email)})
         return _a_dominio(documento) if documento is not None else None
 
     def listar_todos(self) -> list[Usuario]:
@@ -79,12 +79,12 @@ def _a_documento(usuario: Usuario) -> dict[str, Any]:
 
 def _a_dominio(documento: dict[str, Any]) -> Usuario:
     """Reconstruye un `Usuario` a partir del documento BSON leído de Mongo."""
-    return Usuario(
+    return FabricaUsuarios.crear(
+        RolUsuario(documento["rol"]),
         id=uuid.UUID(documento["_id"]),
         nombre_completo=documento["nombre_completo"],
         email=documento["email"],
         password_hash=documento["password_hash"],
-        rol=RolUsuario(documento["rol"]),
         activo=documento["activo"],
         servicios_suscriptos=frozenset(
             ServicioComunicarlos(s) for s in documento.get("servicios_suscriptos", [])

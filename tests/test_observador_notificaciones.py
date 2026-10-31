@@ -14,7 +14,7 @@ from app.compartido.dominio import RolUsuario, ServicioComunicarlos
 from app.infraestructura.observador_notificaciones import ObservadorNotificacionesMongo
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
 from app.supervision.dominio import RelacionSupervision
-from app.usuarios.dominio import Usuario
+from tests.actores import nuevo_usuario
 from tests.fakes import (
     FakeRepositorioNotificaciones,
     FakeRepositorioSupervision,
@@ -64,7 +64,7 @@ class TestObservadorNotificaciones:
         repo_notificaciones: FakeRepositorioNotificaciones,
     ) -> None:
         # Arrange
-        operador = Usuario("Op", "op@comunicarlos.com.ar", "hash", RolUsuario.OPERADOR)
+        operador = nuevo_usuario("Op", "op@comunicarlos.com.ar", "hash", RolUsuario.OPERADOR)
         repo_usuarios.guardar(operador)
         supervisor_1_id = uuid.uuid4()
         supervisor_2_id = uuid.uuid4()
@@ -89,7 +89,7 @@ class TestObservadorNotificaciones:
         repo_notificaciones: FakeRepositorioNotificaciones,
     ) -> None:
         # Arrange: técnico sin ninguna relación de supervisión asignada
-        tecnico = Usuario("Tec", "tec@comunicarlos.com.ar", "hash", RolUsuario.TECNICO)
+        tecnico = nuevo_usuario("Tec", "tec@comunicarlos.com.ar", "hash", RolUsuario.TECNICO)
         repo_usuarios.guardar(tecnico)
 
         # Act
@@ -105,7 +105,7 @@ class TestObservadorNotificaciones:
         repo_notificaciones: FakeRepositorioNotificaciones,
     ) -> None:
         # Arrange: un Solicitante nunca es supervisado (rol no supervisable)
-        solicitante = Usuario(
+        solicitante = nuevo_usuario(
             "Sol",
             "sol@gmail.com",
             "hash",

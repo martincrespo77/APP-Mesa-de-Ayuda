@@ -21,6 +21,7 @@ from app.deps import (
 from app.main import app
 from app.notificaciones.despachador import DespachadorEventos
 from app.usuarios.dominio import Usuario
+from tests.actores import nuevo_usuario
 from tests.fakes import FakeRepositorioRequerimientos, FakeRepositorioUsuarios
 from tests.lifespan import lifespan_vacio
 
@@ -61,7 +62,7 @@ def _crear_usuario(repo: FakeRepositorioUsuarios, email: str, rol: RolUsuario) -
         if rol == RolUsuario.SOLICITANTE
         else frozenset()
     )
-    usuario = Usuario(
+    usuario = nuevo_usuario(
         email.split("@")[0],
         email,
         obtener_password_hash(_PASSWORD),
@@ -134,6 +135,21 @@ class TestCrear:
         # Assert
         assert respuesta.status_code == 201
         assert respuesta.json()["tipo"] == "SOLICITUD"
+
+    def test_titulo_solo_con_espacios_devuelve_422_y_no_500(
+        self, cliente: TestClient, repo_usuarios: FakeRepositorioUsuarios
+    ) -> None:
+        # Arrange: Pydantic acepta "   " (min_length=1); lo rechaza el dominio
+        _crear_usuario(repo_usuarios, "sol@x.com", RolUsuario.SOLICITANTE)
+        token = _token_de(cliente, "sol@x.com")
+
+        # Act
+        respuesta = cliente.post(
+            "/requerimientos", json={**_BODY_INCIDENTE, "titulo": "   "}, headers=_headers(token)
+        )
+
+        # Assert: `DatoInvalidoError` es un DominioError, traducido por el handler
+        assert respuesta.status_code == 422
 
     def test_crear_sin_token_devuelve_401(self, cliente: TestClient) -> None:
         # Act

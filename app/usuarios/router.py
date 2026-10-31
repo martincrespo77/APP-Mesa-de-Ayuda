@@ -1,10 +1,10 @@
 """Endpoints FastAPI del módulo de usuarios: login, auto-registro y
 administración.
 
-Todos los endpoints salvo `/login`, `/registro` y `/me` están gateados con
-`requerir_rol(SUPERVISOR)`, siguiendo la matriz de roles de
-`02_OBJETIVO_Y_DOMINIO_NEGOCIO.md` ("Administrar usuarios": solo
-Supervisor). La única excepción es `/registro`: cualquiera puede crear su
+Todos los endpoints salvo `/login`, `/registro`, `/me` y `/tecnicos` están
+gateados preguntándole al usuario `puede_administrar_usuarios()`, siguiendo
+la matriz de roles de `02_OBJETIVO_Y_DOMINIO_NEGOCIO.md` ("Administrar
+usuarios": solo Supervisor). La única excepción es `/registro`: cualquiera puede crear su
 propia cuenta de SOLICITANTE sin autenticarse (auto-servicio para poder
 cargar tickets); las cuentas operativas (Operador/Técnico/Supervisor)
 las sigue creando exclusivamente un Supervisor vía `POST /usuarios`.
@@ -17,7 +17,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from app.auth import crear_token_acceso, obtener_password_hash
 from app.compartido.dominio import RolUsuario
-from app.deps import obtener_servicio_usuarios, obtener_usuario_actual, requerir_rol
+from app.deps import obtener_servicio_usuarios, obtener_usuario_actual, requerir_permiso
 from app.usuarios.dominio import Usuario
 from app.usuarios.excepciones import CredencialesInvalidasError
 from app.usuarios.schemas import (
@@ -31,6 +31,8 @@ from app.usuarios.schemas import (
 from app.usuarios.servicios import ServicioUsuarios
 
 router = APIRouter(prefix="/usuarios", tags=["usuarios"])
+
+_solo_administradores = Depends(requerir_permiso(lambda u: u.puede_administrar_usuarios()))
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -85,7 +87,7 @@ def obtener_mi_perfil(usuario_actual: Usuario = Depends(obtener_usuario_actual))
     "/tecnicos",
     response_model=list[TecnicoResponse],
     dependencies=[
-        Depends(requerir_rol(RolUsuario.OPERADOR, RolUsuario.TECNICO, RolUsuario.SUPERVISOR))
+        Depends(requerir_permiso(lambda u: u.puede_consultar_tecnicos()))
     ],
 )
 def listar_tecnicos(
@@ -102,7 +104,7 @@ def listar_tecnicos(
     "",
     response_model=UsuarioResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(requerir_rol(RolUsuario.SUPERVISOR))],
+    dependencies=[_solo_administradores],
 )
 def crear_usuario(
     datos: UsuarioCreateRequest, servicio: ServicioUsuarios = Depends(obtener_servicio_usuarios)
@@ -120,7 +122,7 @@ def crear_usuario(
 @router.get(
     "",
     response_model=list[UsuarioResponse],
-    dependencies=[Depends(requerir_rol(RolUsuario.SUPERVISOR))],
+    dependencies=[_solo_administradores],
 )
 def listar_usuarios(
     servicio: ServicioUsuarios = Depends(obtener_servicio_usuarios),
@@ -131,7 +133,7 @@ def listar_usuarios(
 @router.patch(
     "/{usuario_id}/rol",
     response_model=UsuarioResponse,
-    dependencies=[Depends(requerir_rol(RolUsuario.SUPERVISOR))],
+    dependencies=[_solo_administradores],
 )
 def cambiar_rol(
     usuario_id: uuid.UUID,
@@ -145,7 +147,7 @@ def cambiar_rol(
 @router.patch(
     "/{usuario_id}/activar",
     response_model=UsuarioResponse,
-    dependencies=[Depends(requerir_rol(RolUsuario.SUPERVISOR))],
+    dependencies=[_solo_administradores],
 )
 def activar_usuario(
     usuario_id: uuid.UUID, servicio: ServicioUsuarios = Depends(obtener_servicio_usuarios)
@@ -156,7 +158,7 @@ def activar_usuario(
 @router.patch(
     "/{usuario_id}/desactivar",
     response_model=UsuarioResponse,
-    dependencies=[Depends(requerir_rol(RolUsuario.SUPERVISOR))],
+    dependencies=[_solo_administradores],
 )
 def desactivar_usuario(
     usuario_id: uuid.UUID, servicio: ServicioUsuarios = Depends(obtener_servicio_usuarios)

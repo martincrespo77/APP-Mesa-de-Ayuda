@@ -1,16 +1,19 @@
 """Servicio de aplicación: casos de uso del módulo de usuarios.
 
-Orquesta la entidad `Usuario` y el `RepositorioUsuarios` sin conocer el
-motor de persistencia concreto (PyMongo o `FakeRepositorioUsuarios`).
-El hashing de contraseñas ocurre en la capa de presentación/infraestructura
-(`app/auth.py`, Paso 4); aquí solo se recibe el hash ya calculado.
+Solo orquesta (recibe datos ya validados → recupera/instancia entidades →
+las opera → persiste → devuelve): ninguna regla de negocio vive acá. Qué
+email admite cada rol, cuándo un login es válido o qué usuario puede
+recibir tickets lo decide la propia jerarquía `Usuario`. El hashing de
+contraseñas ocurre en infraestructura (`app/auth.py`); aquí solo se recibe
+el hash ya calculado y la función de verificación inyectada.
 """
 
 import uuid
 from collections.abc import Callable
 
 from app.compartido.dominio import RolUsuario, ServicioComunicarlos
-from app.usuarios.dominio import Usuario
+from app.compartido.excepciones import DatoInvalidoError
+from app.usuarios.dominio import Email, FabricaUsuarios, Usuario
 from app.usuarios.excepciones import (
     CredencialesInvalidasError,
     EmailYaRegistradoError,
@@ -36,42 +39,40 @@ class ServicioUsuarios:
         rol: RolUsuario,
         servicios_suscriptos: frozenset[ServicioComunicarlos] | None = None,
     ) -> Usuario:
-        """Crea un nuevo usuario, exigiendo que el email no esté en uso.
+        """Crea un nuevo usuario del rol pedido, exigiendo que el email no esté en uso.
 
-        El chequeo de duplicado usa el email NORMALIZADO (igual que lo
-        guarda `Usuario`): si se comparara el texto crudo, un alta con
-        `Lucia.Gomez@...` sobre un `lucia.gomez@...` existente pasaría el
-        control y recién fallaría contra el índice único de Mongo, con un
-        `DuplicateKeyError` que no es `DominioError` y se escapa como
-        HTTP 500 en vez del 409 que corresponde.
+        La unicidad del email es la única validación propia del caso de uso:
+        requiere consultar al repositorio, algo que una entidad no puede
+        hacer. Construir `Email` primero garantiza que el chequeo use la
+        forma normalizada (la misma con la que se persiste).
         """
-        email_normalizado = Usuario.normalizar_email(email)
+        email_normalizado = Email(email)
         if self._repositorio.buscar_por_email(email_normalizado) is not None:
             raise EmailYaRegistradoError(f"El email '{email_normalizado}' ya está registrado.")
-        usuario = Usuario(
+        usuario = FabricaUsuarios.crear(
+            rol,
             nombre_completo=nombre_completo,
             email=email,
             password_hash=password_hash,
-            rol=rol,
             servicios_suscriptos=servicios_suscriptos,
         )
         self._repositorio.guardar(usuario)
         return usuario
 
     def autenticar(self, email: str, password: str) -> Usuario:
-        """Verifica credenciales y registra el acceso exitoso (auditoría de cuenta).
+        """Busca al usuario y le pide que se autentique (él decide si el login es válido).
 
-        El hashing/verificación de contraseña es responsabilidad de infraestructura
-        (`app/auth.py`); el servicio recibe la función de verificación por inyección
-        para no importar `bcrypt` desde la capa de dominio/aplicación.
+        Un email mal formado se responde igual que uno inexistente (401): el
+        login no debe revelar por qué falló.
         """
-        usuario = self._repositorio.buscar_por_email(Usuario.normalizar_email(email))
-        credenciales_validas = usuario is not None and self._verificador_password(
-            password, usuario.password_hash
-        )
-        if not credenciales_validas or usuario is None or not usuario.activo:
+        try:
+            email_buscado = Email(email)
+        except DatoInvalidoError:
+            raise CredencialesInvalidasError("Email o contraseña incorrectos.") from None
+        usuario = self._repositorio.buscar_por_email(email_buscado)
+        if usuario is None:
             raise CredencialesInvalidasError("Email o contraseña incorrectos.")
-        usuario.registrar_acceso()
+        usuario.autenticar(password, self._verificador_password)
         self._repositorio.guardar(usuario)
         return usuario
 
@@ -79,18 +80,18 @@ class ServicioUsuarios:
         return self._repositorio.buscar_por_id(usuario_id)
 
     def obtener_por_email(self, email: str) -> Usuario | None:
-        return self._repositorio.buscar_por_email(Usuario.normalizar_email(email))
+        return self._repositorio.buscar_por_email(Email(email))
 
     def listar_todos(self) -> list[Usuario]:
         return self._repositorio.listar_todos()
 
     def listar_tecnicos_activos(self) -> list[Usuario]:
-        """Técnicos activos, para poblar selectores de asignación/derivación
-        (Operador y Técnico no tienen acceso a `listar_todos`, solo a esto)."""
+        """Usuarios a los que hoy se les puede asignar o derivar un ticket
+        (para poblar los selectores de asignación/derivación)."""
         return [
             usuario
             for usuario in self._repositorio.listar_todos()
-            if usuario.rol == RolUsuario.TECNICO and usuario.activo
+            if usuario.puede_recibir_requerimientos()
         ]
 
     def activar(self, usuario_id: uuid.UUID) -> Usuario:
@@ -106,10 +107,11 @@ class ServicioUsuarios:
         return usuario
 
     def cambiar_rol(self, usuario_id: uuid.UUID, nuevo_rol: RolUsuario) -> Usuario:
+        """Persiste la nueva encarnación del usuario (mismo id) en el rol pedido."""
         usuario = self._buscar_o_lanzar(usuario_id)
-        usuario.cambiar_rol(nuevo_rol)
-        self._repositorio.guardar(usuario)
-        return usuario
+        usuario_con_nuevo_rol = usuario.cambiar_rol(nuevo_rol)
+        self._repositorio.guardar(usuario_con_nuevo_rol)
+        return usuario_con_nuevo_rol
 
     def _buscar_o_lanzar(self, usuario_id: uuid.UUID) -> Usuario:
         usuario = self._repositorio.buscar_por_id(usuario_id)

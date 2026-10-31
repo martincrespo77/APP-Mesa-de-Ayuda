@@ -1,30 +1,42 @@
 """Entidad abstracta `Requerimiento`.
 
 Clase base de la jerarquía polimórfica `Incidente` / `Solicitud`. Concentra
-los atributos comunes, la máquina de estados y las reglas de permisos por
-rol para cada transición (Information Expert: la propia entidad decide si
-una transición es válida y quién puede ejecutarla).
+los atributos comunes y la máquina de estados (Information Expert: la
+propia entidad decide si una transición es válida desde su estado actual).
+
+Los permisos se resuelven por double dispatch: cada transición recibe al
+`Usuario` actor y le PREGUNTA si puede ejecutarla
+(`actor.puede_cerrar(self)`); cada subclase de `Usuario` contesta según su
+rol, consultando a su vez al ticket lo que necesite saber
+(`requerimiento.pertenece_a(self)`, `esta_asignado_a(self)`). Ninguna de
+las dos clases lee el rol ni compara ids de la otra.
 """
 
 import uuid
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from app.compartido.dominio import RolUsuario
+from app.compartido.validaciones import texto_obligatorio
 from app.requerimientos.dominio.comentario import Comentario
 from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerimiento
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
 from app.requerimientos.excepciones import (
     NotaResolucionRequeridaError,
     PermisoDenegadoError,
+    TecnicoInvalidoError,
     TecnicoNoAsignadoError,
     TransicionInvalidaError,
 )
 
-_ROLES_ASIGNACION = {RolUsuario.OPERADOR, RolUsuario.SUPERVISOR}
-_ROLES_CIERRE = {RolUsuario.OPERADOR, RolUsuario.SUPERVISOR}
-_ROLES_CANCELACION_AMPLIA = {RolUsuario.OPERADOR, RolUsuario.SUPERVISOR}
-_ROLES_REABREN_AL_COMENTAR = {RolUsuario.OPERADOR, RolUsuario.TECNICO}
+if TYPE_CHECKING:
+    from app.usuarios.dominio import Usuario
+
+_ESTADOS_CANCELABLES = {
+    EstadoRequerimiento.ABIERTO,
+    EstadoRequerimiento.EN_ANALISIS,
+    EstadoRequerimiento.EN_PROGRESO,
+}
 _ESTADOS_SIN_COMENTARIOS = {EstadoRequerimiento.CERRADO, EstadoRequerimiento.CANCELADO}
 _ESTADOS_DERIVABLES = {EstadoRequerimiento.EN_ANALISIS, EstadoRequerimiento.EN_PROGRESO}
 
@@ -40,8 +52,8 @@ class Requerimiento(ABC):
         id: uuid.UUID | None = None,
     ) -> None:
         self.id = id or uuid.uuid4()
-        self.titulo = self._validar_titulo(titulo)
-        self.descripcion = self._validar_descripcion(descripcion)
+        self.titulo = texto_obligatorio(titulo, "título")
+        self.descripcion = texto_obligatorio(descripcion, "descripción")
         self.solicitante_id = solicitante_id
         self.estado = EstadoRequerimiento.ABIERTO
         self.fecha_creacion = datetime.now(UTC)
@@ -106,53 +118,74 @@ class Requerimiento(ABC):
         instancia._comentarios = list(comentarios or [])
         return instancia
 
+    # -- Preguntas que le hacen los actores al ticket --------------------------
+
+    def pertenece_a(self, usuario: "Usuario") -> bool:
+        """¿`usuario` es quien abrió este requerimiento?"""
+        return self.solicitante_id == usuario.id
+
+    def esta_asignado_a(self, usuario: "Usuario") -> bool:
+        """¿`usuario` es el técnico actualmente responsable de este requerimiento?"""
+        return self.tecnico_asignado_id == usuario.id
+
+    def esta_abierto(self) -> bool:
+        """¿Todavía nadie lo tomó (sigue en ABIERTO)?"""
+        return self.estado == EstadoRequerimiento.ABIERTO
+
+    def exigir_visible_para(self, actor: "Usuario") -> None:
+        """Lanza `PermisoDenegadoError` si `actor` no puede consultar este ticket
+        (ej. un Solicitante sobre un requerimiento ajeno)."""
+        self._exigir_permiso(actor.puede_ver(self), actor, "consultar este requerimiento")
+
     # -- Transiciones de estado ------------------------------------------------
 
-    def iniciar_analisis(self, autor_id: uuid.UUID, rol_actor: RolUsuario) -> EventoRequerimiento:
-        """ABIERTO -> EN_ANALISIS. Reservado a Operador/Supervisor."""
+    def iniciar_analisis(self, actor: "Usuario") -> EventoRequerimiento:
+        """ABIERTO -> EN_ANALISIS."""
         self._exigir_estado(EstadoRequerimiento.ABIERTO)
-        self._exigir_rol(rol_actor, _ROLES_ASIGNACION, "iniciar el análisis del requerimiento")
+        self._exigir_permiso(
+            actor.puede_iniciar_analisis(self), actor, "iniciar el análisis del requerimiento"
+        )
         self.estado = EstadoRequerimiento.EN_ANALISIS
         return self._registrar_evento(
             tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
-            autor_id=autor_id,
+            autor_id=actor.id,
             detalle="Estado cambiado de ABIERTO a EN_ANALISIS.",
         )
 
-    def asignar_tecnico(
-        self, tecnico_id: uuid.UUID, autor_id: uuid.UUID, rol_actor: RolUsuario
-    ) -> EventoRequerimiento:
-        """Asigna un técnico responsable. Reservado a Operador/Supervisor."""
+    def asignar_tecnico(self, tecnico: "Usuario", actor: "Usuario") -> EventoRequerimiento:
+        """Asigna `tecnico` como responsable, si `actor` puede asignar y
+        `tecnico` puede recibir requerimientos."""
         self._exigir_estado(EstadoRequerimiento.EN_ANALISIS)
-        self._exigir_rol(rol_actor, _ROLES_ASIGNACION, "asignar un técnico al requerimiento")
-        self.tecnico_asignado_id = tecnico_id
+        self._exigir_permiso(
+            actor.puede_asignar_tecnico(self), actor, "asignar un técnico al requerimiento"
+        )
+        self._exigir_que_pueda_recibirlo(tecnico)
+        self.tecnico_asignado_id = tecnico.id
         return self._registrar_evento(
             tipo_evento=TipoEventoRequerimiento.ASIGNACION,
-            autor_id=autor_id,
-            detalle=f"Técnico '{tecnico_id}' asignado al requerimiento.",
+            autor_id=actor.id,
+            detalle=f"Técnico '{tecnico.id}' asignado al requerimiento.",
         )
 
-    def iniciar_progreso(self, autor_id: uuid.UUID, rol_actor: RolUsuario) -> EventoRequerimiento:
-        """EN_ANALISIS -> EN_PROGRESO. Exige técnico asignado; solo el técnico
-        asignado o un Supervisor pueden ejecutarla."""
+    def iniciar_progreso(self, actor: "Usuario") -> EventoRequerimiento:
+        """EN_ANALISIS -> EN_PROGRESO. Exige un técnico asignado."""
         self._exigir_estado(EstadoRequerimiento.EN_ANALISIS)
         if self.tecnico_asignado_id is None:
             raise TecnicoNoAsignadoError("No se puede iniciar el progreso sin un técnico asignado.")
-        self._exigir_rol_o_asignado(autor_id, rol_actor, "iniciar el progreso del requerimiento")
+        self._exigir_permiso(
+            actor.puede_iniciar_progreso(self), actor, "iniciar el progreso del requerimiento"
+        )
         self.estado = EstadoRequerimiento.EN_PROGRESO
         return self._registrar_evento(
             tipo_evento=TipoEventoRequerimiento.CAMBIO_ESTADO,
-            autor_id=autor_id,
+            autor_id=actor.id,
             detalle="Estado cambiado de EN_ANALISIS a EN_PROGRESO.",
         )
 
-    def resolver(
-        self, nota_resolucion: str, autor_id: uuid.UUID, rol_actor: RolUsuario
-    ) -> EventoRequerimiento:
-        """EN_PROGRESO -> RESUELTO. Exige nota descriptiva; solo el técnico
-        asignado o un Supervisor pueden ejecutarla."""
+    def resolver(self, nota_resolucion: str, actor: "Usuario") -> EventoRequerimiento:
+        """EN_PROGRESO -> RESUELTO. Exige una nota de resolución descriptiva."""
         self._exigir_estado(EstadoRequerimiento.EN_PROGRESO)
-        self._exigir_rol_o_asignado(autor_id, rol_actor, "resolver el requerimiento")
+        self._exigir_permiso(actor.puede_resolver(self), actor, "resolver el requerimiento")
         nota_normalizada = nota_resolucion.strip() if isinstance(nota_resolucion, str) else ""
         if not nota_normalizada:
             raise NotaResolucionRequeridaError(
@@ -162,102 +195,77 @@ class Requerimiento(ABC):
         self.estado = EstadoRequerimiento.RESUELTO
         return self._registrar_evento(
             tipo_evento=TipoEventoRequerimiento.RESOLUCION,
-            autor_id=autor_id,
+            autor_id=actor.id,
             detalle=f"Requerimiento resuelto: {nota_normalizada}",
         )
 
-    def cerrar(self, autor_id: uuid.UUID, rol_actor: RolUsuario) -> EventoRequerimiento:
-        """RESUELTO -> CERRADO. Conformidad final: solicitante propio,
-        Operador o Supervisor (nunca Técnico)."""
+    def cerrar(self, actor: "Usuario") -> EventoRequerimiento:
+        """RESUELTO -> CERRADO (cierre de conformidad)."""
         self._exigir_estado(EstadoRequerimiento.RESUELTO)
-        es_solicitante_propio = (
-            rol_actor == RolUsuario.SOLICITANTE and autor_id == self.solicitante_id
-        )
-        if not (es_solicitante_propio or rol_actor in _ROLES_CIERRE):
-            raise PermisoDenegadoError(
-                f"El rol '{rol_actor.value}' no puede dar cierre de conformidad."
-            )
+        self._exigir_permiso(actor.puede_cerrar(self), actor, "dar cierre de conformidad")
         self.estado = EstadoRequerimiento.CERRADO
         return self._registrar_evento(
             tipo_evento=TipoEventoRequerimiento.CIERRE,
-            autor_id=autor_id,
+            autor_id=actor.id,
             detalle="Requerimiento cerrado por conformidad.",
         )
 
-    def cancelar(self, autor_id: uuid.UUID, rol_actor: RolUsuario) -> EventoRequerimiento:
-        """ABIERTO/EN_ANALISIS/EN_PROGRESO -> CANCELADO. El solicitante solo
-        puede cancelar mientras el ticket está ABIERTO; Operador y Supervisor
-        pueden cancelar en cualquiera de los tres estados; Técnico nunca."""
-        estados_cancelables = (
-            EstadoRequerimiento.ABIERTO,
-            EstadoRequerimiento.EN_ANALISIS,
-            EstadoRequerimiento.EN_PROGRESO,
-        )
+    def cancelar(self, actor: "Usuario") -> EventoRequerimiento:
+        """ABIERTO/EN_ANALISIS/EN_PROGRESO -> CANCELADO."""
         estado_previo = self.estado
-        if estado_previo not in estados_cancelables:
+        if estado_previo not in _ESTADOS_CANCELABLES:
             raise TransicionInvalidaError(
                 f"No se puede cancelar un requerimiento en estado '{estado_previo.value}'."
             )
-        es_solicitante_en_abierto = (
-            rol_actor == RolUsuario.SOLICITANTE
-            and autor_id == self.solicitante_id
-            and estado_previo == EstadoRequerimiento.ABIERTO
+        self._exigir_permiso(
+            actor.puede_cancelar(self), actor, "cancelar el requerimiento en este estado"
         )
-        if not (es_solicitante_en_abierto or rol_actor in _ROLES_CANCELACION_AMPLIA):
-            raise PermisoDenegadoError(
-                f"El rol '{rol_actor.value}' no puede cancelar el requerimiento en este estado."
-            )
         self.estado = EstadoRequerimiento.CANCELADO
         return self._registrar_evento(
             tipo_evento=TipoEventoRequerimiento.CANCELACION,
-            autor_id=autor_id,
+            autor_id=actor.id,
             detalle=f"Requerimiento cancelado desde el estado '{estado_previo.value}'.",
         )
 
-    def agregar_comentario(
-        self, texto: str, autor_id: uuid.UUID, rol_actor: RolUsuario
-    ) -> Comentario:
+    def agregar_comentario(self, texto: str, actor: "Usuario") -> Comentario:
         """Agrega un comentario de seguimiento al ticket.
 
-        Permiso por rol (Information Expert, no Strategy: son 4 casos fijos,
-        no algoritmos intercambiables): Solicitante solo si es el dueño,
-        Operador siempre, Técnico solo si es el asignado, Supervisor nunca.
-        No se puede comentar un ticket CERRADO/CANCELADO. Un comentario de
-        Operador/Técnico sobre un RESUELTO lo reabre a EN_PROGRESO (no hay
-        un estado "REABIERTO": la reapertura queda auditada como evento).
+        No se puede comentar un ticket CERRADO/CANCELADO. Si `actor` es de
+        los que reabren al comentar (`actor.reabre_al_comentar()`), un
+        comentario sobre un RESUELTO lo devuelve a EN_PROGRESO (no hay un
+        estado "REABIERTO": la reapertura queda auditada como evento).
         """
         if self.estado in _ESTADOS_SIN_COMENTARIOS:
             raise TransicionInvalidaError(
                 f"No se pueden agregar comentarios a un requerimiento en estado "
                 f"'{self.estado.value}'."
             )
-        self._exigir_permiso_comentario(autor_id, rol_actor)
-        texto_normalizado = self._validar_texto_comentario(texto)
+        self._exigir_permiso(actor.puede_comentar(self), actor, "comentar este requerimiento")
+        texto_normalizado = texto_obligatorio(texto, "texto del comentario")
         comentario = Comentario(
-            requerimiento_id=self.id, autor_id=autor_id, texto=texto_normalizado
+            requerimiento_id=self.id, autor_id=actor.id, texto=texto_normalizado
         )
         self._comentarios.append(comentario)
         self._registrar_evento(
             tipo_evento=TipoEventoRequerimiento.COMENTARIO,
-            autor_id=autor_id,
+            autor_id=actor.id,
             detalle=f"Comentario agregado: {texto_normalizado}",
         )
-        if self.estado == EstadoRequerimiento.RESUELTO and rol_actor in _ROLES_REABREN_AL_COMENTAR:
+        if self.estado == EstadoRequerimiento.RESUELTO and actor.reabre_al_comentar():
             self.estado = EstadoRequerimiento.EN_PROGRESO
             self._registrar_evento(
                 tipo_evento=TipoEventoRequerimiento.REAPERTURA,
-                autor_id=autor_id,
+                autor_id=actor.id,
                 detalle="Requerimiento reabierto a EN_PROGRESO por un nuevo comentario.",
             )
         return comentario
 
     def derivar_interconsulta(
-        self, tecnico_destino_id: uuid.UUID, autor_id: uuid.UUID, rol_actor: RolUsuario
+        self, tecnico_destino: "Usuario", actor: "Usuario"
     ) -> EventoRequerimiento:
         """Deriva el ticket a otro técnico (interconsulta/colaboración).
 
-        Solo el técnico actualmente asignado puede derivar, y solo mientras
-        el ticket está EN_ANALISIS o EN_PROGRESO. Reasigna
+        Solo mientras el ticket está EN_ANALISIS o EN_PROGRESO. Reasigna
         `tecnico_asignado_id` (mantiene el invariante de un único técnico
         asignado a la vez) y registra el técnico origen/destino en el evento.
         """
@@ -265,25 +273,23 @@ class Requerimiento(ABC):
             raise TransicionInvalidaError(
                 f"No se puede derivar un requerimiento en estado '{self.estado.value}'."
             )
-        if not (rol_actor == RolUsuario.TECNICO and autor_id == self.tecnico_asignado_id):
-            raise PermisoDenegadoError(
-                f"El rol '{rol_actor.value}' no puede derivar este requerimiento."
-            )
-        if tecnico_destino_id == autor_id:
+        self._exigir_permiso(actor.puede_derivar(self), actor, "derivar este requerimiento")
+        if self.esta_asignado_a(tecnico_destino):
             raise TransicionInvalidaError(
                 "No se puede derivar el requerimiento al mismo técnico asignado."
             )
-        tecnico_origen_id = autor_id
-        self.tecnico_asignado_id = tecnico_destino_id
+        self._exigir_que_pueda_recibirlo(tecnico_destino)
+        tecnico_origen_id = self.tecnico_asignado_id
+        self.tecnico_asignado_id = tecnico_destino.id
         return self._registrar_evento(
             tipo_evento=TipoEventoRequerimiento.DERIVACION,
-            autor_id=autor_id,
+            autor_id=actor.id,
             detalle=(
-                f"Derivado del técnico '{tecnico_origen_id}' al técnico '{tecnico_destino_id}'."
+                f"Derivado del técnico '{tecnico_origen_id}' al técnico '{tecnico_destino.id}'."
             ),
         )
 
-    # -- Helpers privados de validación e invariantes --------------------------
+    # -- Helpers privados de invariantes ---------------------------------------
 
     def _exigir_estado(self, estado_requerido: EstadoRequerimiento) -> None:
         if self.estado != estado_requerido:
@@ -292,31 +298,16 @@ class Requerimiento(ABC):
                 f"pero el requerimiento está en '{self.estado.value}'."
             )
 
-    @staticmethod
-    def _exigir_rol(rol_actor: RolUsuario, roles_permitidos: set[RolUsuario], accion: str) -> None:
-        if rol_actor not in roles_permitidos:
-            raise PermisoDenegadoError(f"El rol '{rol_actor.value}' no puede {accion}.")
+    def _exigir_permiso(self, tiene_permiso: bool, actor: "Usuario", accion: str) -> None:
+        """Traduce la respuesta del actor ("¿podés?") en la excepción de dominio."""
+        if not tiene_permiso:
+            raise PermisoDenegadoError(f"El rol '{actor.rol.value}' no puede {accion}.")
 
-    def _exigir_rol_o_asignado(
-        self, autor_id: uuid.UUID, rol_actor: RolUsuario, accion: str
-    ) -> None:
-        es_tecnico_asignado = (
-            rol_actor == RolUsuario.TECNICO and autor_id == self.tecnico_asignado_id
-        )
-        if not (es_tecnico_asignado or rol_actor == RolUsuario.SUPERVISOR):
-            raise PermisoDenegadoError(f"El rol '{rol_actor.value}' no puede {accion}.")
-
-    def _exigir_permiso_comentario(self, autor_id: uuid.UUID, rol_actor: RolUsuario) -> None:
-        es_solicitante_dueno = (
-            rol_actor == RolUsuario.SOLICITANTE and autor_id == self.solicitante_id
-        )
-        es_tecnico_asignado = (
-            rol_actor == RolUsuario.TECNICO and autor_id == self.tecnico_asignado_id
-        )
-        permitido = es_solicitante_dueno or rol_actor == RolUsuario.OPERADOR or es_tecnico_asignado
-        if not permitido:
-            raise PermisoDenegadoError(
-                f"El rol '{rol_actor.value}' no puede comentar este requerimiento."
+    def _exigir_que_pueda_recibirlo(self, tecnico: "Usuario") -> None:
+        if not tecnico.puede_recibir_requerimientos():
+            raise TecnicoInvalidoError(
+                f"El usuario '{tecnico.id}' no es un Técnico activo: solo se puede asignar "
+                "o derivar un requerimiento a un Técnico activo."
             )
 
     def _registrar_evento(
@@ -330,30 +321,3 @@ class Requerimiento(ABC):
         )
         self._historial.append(evento)
         return evento
-
-    @staticmethod
-    def _validar_titulo(titulo: str) -> str:
-        if not isinstance(titulo, str):
-            raise TypeError("El título debe ser una cadena de texto.")
-        titulo_normalizado = titulo.strip()
-        if not titulo_normalizado:
-            raise ValueError("El título no puede estar vacío.")
-        return titulo_normalizado
-
-    @staticmethod
-    def _validar_descripcion(descripcion: str) -> str:
-        if not isinstance(descripcion, str):
-            raise TypeError("La descripción debe ser una cadena de texto.")
-        descripcion_normalizada = descripcion.strip()
-        if not descripcion_normalizada:
-            raise ValueError("La descripción no puede estar vacía.")
-        return descripcion_normalizada
-
-    @staticmethod
-    def _validar_texto_comentario(texto: str) -> str:
-        if not isinstance(texto, str):
-            raise TypeError("El texto del comentario debe ser una cadena de texto.")
-        texto_normalizado = texto.strip()
-        if not texto_normalizado:
-            raise ValueError("El texto del comentario no puede estar vacío.")
-        return texto_normalizado

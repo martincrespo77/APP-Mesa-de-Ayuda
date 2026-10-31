@@ -17,3 +17,7 @@ class RelacionYaExisteError(SupervisionError):
 
 class RolNoSupervisableError(SupervisionError):
     """Lanzada cuando el supervisado no tiene un rol supervisable (Operador/Técnico)."""
+
+
+class SupervisionNoPermitidaError(SupervisionError):
+    """Lanzada cuando un usuario que no es Supervisor intenta supervisar a alguien."""

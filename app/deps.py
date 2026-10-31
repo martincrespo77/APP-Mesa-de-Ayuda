@@ -16,7 +16,6 @@ from fastapi.security import OAuth2PasswordBearer
 from pymongo.database import Database
 
 from app.auth import TokenInvalidoError, decodificar_token, verificar_password
-from app.compartido.dominio import RolUsuario
 from app.infraestructura.observador_notificaciones import ObservadorNotificacionesMongo
 from app.infraestructura.repo_notificaciones import RepositorioNotificacionesMongo
 from app.infraestructura.repo_requerimientos import RepositorioRequerimientosMongo
@@ -153,19 +152,20 @@ def obtener_usuario_actual(
     return usuario
 
 
-def requerir_rol(*roles_permitidos: RolUsuario) -> Callable[[Usuario], Usuario]:
-    """Dependencia-fábrica: exige que el rol del usuario actual esté autorizado.
+def requerir_permiso(tiene_permiso: Callable[[Usuario], bool]) -> Callable[[Usuario], Usuario]:
+    """Dependencia-fábrica: exige que el usuario actual responda que sí a una
+    pregunta de permiso de la matriz de roles.
 
-    Uso exclusivo en endpoints SIN contraparte de dominio (ej. administrar
-    usuarios, matriz de doc02: solo `SUPERVISOR`). Las transiciones de
-    `Requerimiento` no la usan: el propio método de la entidad ya valida
-    el rol (Information Expert) y lanza `PermisoDenegadoError`, traducido a
-    HTTP 403 por el exception handler — duplicar el chequeo aquí sería
-    repetir la misma regla de negocio en dos capas.
+    El router no decide qué roles pasan: le PREGUNTA al usuario (ej.
+    `lambda u: u.puede_administrar_usuarios()`) y cada subclase de `Usuario`
+    contesta. Uso exclusivo en endpoints sin una entidad que ya haga esa
+    pregunta (administrar usuarios, supervisiones, notificaciones). Las
+    transiciones de `Requerimiento` no la usan: la propia entidad le
+    pregunta al actor y lanza `PermisoDenegadoError` (HTTP 403).
     """
 
     def verificar(usuario_actual: Usuario = Depends(obtener_usuario_actual)) -> Usuario:
-        if usuario_actual.rol not in roles_permitidos:
+        if not tiene_permiso(usuario_actual):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"El rol '{usuario_actual.rol.value}' no tiene acceso a esta operación.",
