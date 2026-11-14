@@ -181,7 +181,9 @@ class Usuario(ABC):
         """
 
     def puede_ver(self, requerimiento: "Requerimiento") -> bool:
-        return False
+        """¿Puede consultar este ticket? Lo decide su propio criterio de visibilidad,
+        así el listado y la consulta individual nunca pueden divergir."""
+        return self.criterio_visibilidad().es_satisfecho_por(requerimiento)
 
     def puede_iniciar_analisis(self, requerimiento: "Requerimiento") -> bool:
         return False

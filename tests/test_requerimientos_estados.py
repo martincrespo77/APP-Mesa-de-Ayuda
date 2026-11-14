@@ -259,6 +259,40 @@ class TestExigenciasDelUsuario:
             ticket.reabrir(otro)
         assert ticket.estado == EstadoRequerimiento.RESUELTO
 
+    def test_reabrir_descarta_la_nota_de_resolucion_anterior(self) -> None:
+        # Arrange
+        tecnico = un_tecnico()
+        ticket = _ticket_resuelto_por(tecnico)
+        assert ticket.nota_resolucion == "Se cambió el ONT."
+
+        # Act: el técnico asignado comenta y el ticket se reabre
+        ticket.agregar_comentario("Volvió a fallar.", tecnico)
+
+        # Assert
+        assert ticket.estado == EstadoRequerimiento.EN_PROGRESO
+        assert ticket.nota_resolucion is None
+
+    def test_puede_ver_coincide_con_su_criterio_de_visibilidad(self) -> None:
+        # Arrange: un ticket propio del solicitante y uno ajeno
+        solicitante = un_solicitante()
+        propio = _ticket_resuelto_por(un_tecnico())
+        ajeno = DatosIncidente(
+            titulo="x",
+            descripcion="y",
+            servicio=ServicioComunicarlos.TELEVISION,
+            urgencia=UrgenciaIncidente.MENOR,
+            categoria=CategoriaIncidente.BLOQUEO_SIM,
+            pasos_reproduccion="p",
+        ).construir_para(solicitante)
+
+        # Assert: consulta individual y listado usan la misma regla
+        for usuario in (solicitante, un_operador(), un_tecnico(), un_supervisor()):
+            criterio = usuario.criterio_visibilidad()
+            for ticket in (propio, ajeno):
+                assert usuario.puede_ver(ticket) == criterio.es_satisfecho_por(ticket)
+        assert solicitante.puede_ver(ajeno)
+        assert not solicitante.puede_ver(propio)
+
     def test_exigir_supervisable(self) -> None:
         # Act: no lanzan
         un_operador().exigir_supervisable()

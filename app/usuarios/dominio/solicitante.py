@@ -39,9 +39,6 @@ class Solicitante(Usuario):
     def criterio_visibilidad(self) -> CriterioVisibilidad:
         return CriterioAbiertosPor(self)
 
-    def puede_ver(self, requerimiento: "Requerimiento") -> bool:
-        return requerimiento.pertenece_a(self)
-
     def puede_cerrar(self, requerimiento: "Requerimiento") -> bool:
         return requerimiento.pertenece_a(self)
 

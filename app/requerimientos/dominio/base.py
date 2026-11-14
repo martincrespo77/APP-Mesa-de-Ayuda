@@ -226,6 +226,8 @@ class Requerimiento(ABC):
         """
         siguiente = self._estado.reabrir()
         actor.exigir_autorizacion(actor.puede_reabrir(self), "reabrir el requerimiento")
+        # Vuelve a trabajarse: la nota anterior ya no describe una solución vigente.
+        self.nota_resolucion = None
         return self._cambiar_estado(
             siguiente,
             TipoEventoRequerimiento.REAPERTURA,

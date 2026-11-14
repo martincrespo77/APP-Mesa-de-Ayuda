@@ -8,16 +8,12 @@ y puede consultar el listado de técnicos (para asignar o derivar).
 """
 
 from abc import ABC
-from typing import TYPE_CHECKING
 
 from app.compartido.dominio import ServicioComunicarlos
 from app.requerimientos.dominio.criterios import CriterioTodos, CriterioVisibilidad
 from app.usuarios.dominio.email import Email
 from app.usuarios.dominio.usuario import Usuario
 from app.usuarios.excepciones import EmailCorporativoRequeridoError, SuscripcionRequeridaError
-
-if TYPE_CHECKING:
-    from app.requerimientos.dominio.base import Requerimiento
 
 DOMINIO_CORPORATIVO = "comunicarlos.com.ar"
 
@@ -42,9 +38,6 @@ class Empleado(Usuario, ABC):
 
     def criterio_visibilidad(self) -> CriterioVisibilidad:
         return CriterioTodos()
-
-    def puede_ver(self, requerimiento: "Requerimiento") -> bool:
-        return True
 
     def puede_consultar_tecnicos(self) -> bool:
         return True
