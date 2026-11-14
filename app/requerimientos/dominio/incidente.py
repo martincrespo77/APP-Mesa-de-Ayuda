@@ -3,14 +3,17 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from app.compartido.dominio import ServicioComunicarlos
 from app.compartido.validaciones import instancia_de, texto_obligatorio
 from app.requerimientos.dominio.base import Requerimiento
+from app.requerimientos.dominio.codigos import EstadoRequerimiento, TipoRequerimiento
 from app.requerimientos.dominio.comentario import Comentario
-from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerimiento
 from app.requerimientos.eventos import EventoRequerimiento
+
+if TYPE_CHECKING:
+    from app.usuarios.dominio import Usuario
 
 
 class UrgenciaIncidente(StrEnum):
@@ -36,14 +39,14 @@ class Incidente(Requerimiento):
         self,
         titulo: str,
         descripcion: str,
-        solicitante_id: uuid.UUID,
+        solicitante: "Usuario",
         urgencia: UrgenciaIncidente,
         categoria: CategoriaIncidente,
         servicio: ServicioComunicarlos,
         pasos_reproduccion: str,
         id: uuid.UUID | None = None,
     ) -> None:
-        super().__init__(titulo, descripcion, solicitante_id, id)
+        super().__init__(titulo, descripcion, solicitante, id)
         self.urgencia = instancia_de(urgencia, UrgenciaIncidente, "urgencia")
         self.categoria = instancia_de(categoria, CategoriaIncidente, "categoría")
         self.servicio = instancia_de(servicio, ServicioComunicarlos, "servicio")

@@ -9,13 +9,13 @@ servicio de la cooperativa.
 from typing import TYPE_CHECKING
 
 from app.compartido.dominio import RolUsuario, ServicioComunicarlos
+from app.requerimientos.dominio.criterios import CriterioAbiertosPor, CriterioVisibilidad
 from app.usuarios.dominio.email import Email
 from app.usuarios.dominio.usuario import Usuario
 from app.usuarios.excepciones import SuscripcionRequeridaError
 
 if TYPE_CHECKING:
     from app.requerimientos.dominio.base import Requerimiento
-    from app.requerimientos.repositorio import RepositorioRequerimientos
 
 
 class Solicitante(Usuario):
@@ -36,10 +36,8 @@ class Solicitante(Usuario):
                 "El Solicitante debe estar suscripto a al menos un servicio de la cooperativa."
             )
 
-    def requerimientos_visibles(
-        self, repositorio: "RepositorioRequerimientos"
-    ) -> list["Requerimiento"]:
-        return repositorio.listar_por_solicitante(self.id)
+    def criterio_visibilidad(self) -> CriterioVisibilidad:
+        return CriterioAbiertosPor(self)
 
     def puede_ver(self, requerimiento: "Requerimiento") -> bool:
         return requerimiento.pertenece_a(self)

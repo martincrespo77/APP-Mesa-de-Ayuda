@@ -108,8 +108,8 @@ def _crear_usuarios() -> dict[str, Usuario]:
 
 def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Solicitud]:
     """Incidentes y solicitudes cubriendo los 6 estados del ciclo de vida."""
-    solicitante1 = usuarios["solicitante1"].id
-    solicitante2 = usuarios["solicitante2"].id
+    solicitante1 = usuarios["solicitante1"]
+    solicitante2 = usuarios["solicitante2"]
     operador = usuarios["operador1"]
     tecnico = usuarios["tecnico1"]
 
@@ -117,7 +117,7 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         id=_id("incidente-abierto"),
         titulo="Corte total de fibra en Barrio Centro",
         descripcion="Sin conectividad desde esta mañana.",
-        solicitante_id=solicitante1,
+        solicitante=solicitante1,
         urgencia=UrgenciaIncidente.CRITICO,
         categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
         servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
@@ -128,7 +128,7 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         id=_id("incidente-en-analisis"),
         titulo="Intermitencia en telefonía celular",
         descripcion="Cortes de llamada cada pocos minutos.",
-        solicitante_id=solicitante2,
+        solicitante=solicitante2,
         urgencia=UrgenciaIncidente.IMPORTANTE,
         categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
         servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
@@ -140,7 +140,7 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         id=_id("incidente-en-progreso"),
         titulo="Degradación de señal de TV",
         descripcion="Pixelado constante en varios canales.",
-        solicitante_id=solicitante1,
+        solicitante=solicitante1,
         urgencia=UrgenciaIncidente.IMPORTANTE,
         categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
         servicio=ServicioComunicarlos.TELEVISION,
@@ -154,7 +154,7 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         id=_id("incidente-resuelto"),
         titulo="Celular bloqueado tras robo de SIM",
         descripcion="El cliente reporta la línea bloqueada.",
-        solicitante_id=solicitante2,
+        solicitante=solicitante2,
         urgencia=UrgenciaIncidente.MENOR,
         categoria=CategoriaIncidente.BLOQUEO_SIM,
         servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
@@ -171,7 +171,7 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         id=_id("incidente-cerrado"),
         titulo="Sin señal de fibra en oficina",
         descripcion="Caída total del enlace corporativo.",
-        solicitante_id=solicitante1,
+        solicitante=solicitante1,
         urgencia=UrgenciaIncidente.IMPORTANTE,
         categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
         servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
@@ -187,7 +187,7 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         id=_id("incidente-cancelado"),
         titulo="Equipo de TV extraviado en mudanza",
         descripcion="El cliente confirmó que apareció el decodificador.",
-        solicitante_id=solicitante2,
+        solicitante=solicitante2,
         urgencia=UrgenciaIncidente.MENOR,
         categoria=CategoriaIncidente.PERDIDA_O_DESTRUCCION_DE_EQUIPO,
         servicio=ServicioComunicarlos.TELEVISION,
@@ -199,7 +199,7 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         id=_id("solicitud-abierta"),
         titulo="Alta de nuevo servicio de internet",
         descripcion="Cliente nuevo solicita instalación.",
-        solicitante_id=solicitante1,
+        solicitante=solicitante1,
         categoria=CategoriaSolicitud.ALTA_SERVICIO,
         servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
     )
@@ -208,7 +208,7 @@ def _crear_requerimientos(usuarios: dict[str, Usuario]) -> list[Incidente | Soli
         id=_id("solicitud-en-progreso"),
         titulo="Baja de línea de telefonía celular",
         descripcion="Cliente pide dar de baja una línea adicional.",
-        solicitante_id=solicitante2,
+        solicitante=solicitante2,
         categoria=CategoriaSolicitud.BAJA_SERVICIO,
         servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
     )

@@ -31,6 +31,6 @@ class TecnicoInvalidoError(RequerimientoError):
     """Lanzada al asignar o derivar a un id que no es un Técnico activo existente.
 
     La lanza `Requerimiento` cuando el destino contesta que no puede recibir
-    requerimientos (`usuario.puede_recibir_requerimientos()`), o el servicio
+    requerimientos (`usuario.exigir_que_pueda_recibir_requerimientos()`), o el servicio
     cuando el id ni siquiera existe en el repositorio.
     """

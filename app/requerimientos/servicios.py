@@ -1,9 +1,10 @@
 """Servicio de aplicación: casos de uso del módulo de requerimientos.
 
-Punto de integración de los patrones del Paso 2/3: pide a la
-`FabricaRequerimientos` (Factory Method) que construya la entidad, delega
-en `Requerimiento` y en el `Usuario` actor (Information Expert + double
-dispatch) toda decisión de negocio, persiste vía `RepositorioRequerimientos`
+Punto de integración de los patrones del dominio: pide a los datos de
+creación (`DatosIncidente`/`DatosSolicitud`) que construyan la entidad para
+el actor, delega en `Requerimiento` y en el `Usuario` actor (Information
+Expert + double dispatch) toda decisión de negocio, ejecuta la visibilidad
+como `CriterioVisibilidad` (Specification), persiste vía `RepositorioRequerimientos`
 (Dependency Inversion) y despacha cada `EventoRequerimiento` resultante a
 través de `DespachadorEventos` (Observer).
 
@@ -16,18 +17,16 @@ repositorio, algo que ninguna entidad puede saber.
 
 import uuid
 from collections.abc import Callable
-from typing import Any
 
 from app.notificaciones.despachador import DespachadorEventos
 from app.requerimientos.dominio.base import Requerimiento
 from app.requerimientos.dominio.comentario import Comentario
-from app.requerimientos.dominio.estados import TipoRequerimiento
+from app.requerimientos.dominio.creacion.base import DatosRequerimiento
 from app.requerimientos.eventos import EventoRequerimiento
 from app.requerimientos.excepciones import (
     RequerimientoNoEncontradoError,
     TecnicoInvalidoError,
 )
-from app.requerimientos.fabrica import FabricaRequerimientos
 from app.requerimientos.repositorio import RepositorioRequerimientos
 from app.usuarios.dominio import Usuario
 from app.usuarios.repositorio import RepositorioUsuarios
@@ -46,9 +45,14 @@ class ServicioRequerimientos:
         self._despachador = despachador
         self._repositorio_usuarios = repositorio_usuarios
 
-    def crear(self, tipo: TipoRequerimiento, **atributos: Any) -> Requerimiento:
-        """Crea un requerimiento (cualquier rol puede crear el propio) y lo persiste."""
-        requerimiento = FabricaRequerimientos.crear(tipo, **atributos)
+    def crear(self, actor: Usuario, datos: DatosRequerimiento) -> Requerimiento:
+        """Crea el requerimiento que `actor` abre (cualquier rol puede crear el propio).
+
+        Los `datos` (un `DatosIncidente` o `DatosSolicitud`, ya validados)
+        construyen la entidad concreta para su solicitante: el servicio no
+        elige la clase ni arma `**kwargs`.
+        """
+        requerimiento = datos.construir_para(actor)
         self._repositorio.guardar(requerimiento)
         for evento_inicial in requerimiento.historial:
             self._despachador.notificar(evento_inicial)
@@ -64,8 +68,8 @@ class ServicioRequerimientos:
         return requerimiento
 
     def listar_visibles_para(self, actor: Usuario) -> list[Requerimiento]:
-        """Los requerimientos que `actor` puede ver: cada rol elige la consulta."""
-        return actor.requerimientos_visibles(self._repositorio)
+        """Los requerimientos que `actor` puede ver: cada rol aporta su criterio."""
+        return self._repositorio.listar_por_criterio(actor.criterio_visibilidad())
 
     def iniciar_analisis(self, requerimiento_id: uuid.UUID, actor: Usuario) -> Requerimiento:
         return self._aplicar_transicion(requerimiento_id, lambda req: req.iniciar_analisis(actor))
@@ -124,7 +128,8 @@ class ServicioRequerimientos:
         """Recupera el usuario destino de una asignación/derivación.
 
         Solo valida que exista: si es o no un Técnico activo lo decide el
-        propio `Requerimiento` preguntándole `puede_recibir_requerimientos()`.
+        propio usuario al pedírselo el `Requerimiento`
+        (`exigir_que_pueda_recibir_requerimientos()`).
         """
         tecnico = self._repositorio_usuarios.buscar_por_id(tecnico_id)
         if tecnico is None:

@@ -6,6 +6,11 @@ servicio el `Usuario` autenticado completo, y es la propia entidad
 (double dispatch) y lanza `PermisoDenegadoError`, traducida a HTTP 403 por
 el exception handler de `app/main.py`. Duplicar el chequeo aquí repetiría
 la misma regla de negocio en dos capas.
+
+Sin `isinstance`: el body de creación se traduce solo a su Value Object de
+dominio (`datos.a_datos()`), y la respuesta se elige por el discriminador
+polimórfico `requerimiento.tipo` en un registro (mismo idioma que
+`FabricaRequerimientos`).
 """
 
 import uuid
@@ -14,13 +19,11 @@ from fastapi import APIRouter, Depends
 
 from app.deps import obtener_servicio_requerimientos, obtener_usuario_actual
 from app.requerimientos.dominio.base import Requerimiento
-from app.requerimientos.dominio.estados import TipoRequerimiento
-from app.requerimientos.dominio.incidente import Incidente
+from app.requerimientos.dominio.codigos import TipoRequerimiento
 from app.requerimientos.schemas import (
     AgregarComentarioRequest,
     AsignarTecnicoRequest,
     ComentarioResponse,
-    CrearIncidenteRequest,
     CrearRequerimientoRequest,
     DerivarInterconsultaRequest,
     IncidenteResponse,
@@ -34,11 +37,15 @@ from app.usuarios.dominio import Usuario
 router = APIRouter(prefix="/requerimientos", tags=["requerimientos"])
 
 
+_RESPUESTA_POR_TIPO: dict[TipoRequerimiento, type[IncidenteResponse | SolicitudResponse]] = {
+    TipoRequerimiento.INCIDENTE: IncidenteResponse,
+    TipoRequerimiento.SOLICITUD: SolicitudResponse,
+}
+
+
 def _a_respuesta(requerimiento: Requerimiento) -> IncidenteResponse | SolicitudResponse:
-    """Convierte la entidad de dominio en el schema de respuesta polimórfico correcto."""
-    if isinstance(requerimiento, Incidente):
-        return IncidenteResponse.model_validate(requerimiento)
-    return SolicitudResponse.model_validate(requerimiento)
+    """Convierte la entidad de dominio en el schema de respuesta de su tipo."""
+    return _RESPUESTA_POR_TIPO[requerimiento.tipo].model_validate(requerimiento)
 
 
 @router.post("", response_model=RequerimientoResponse, status_code=201)
@@ -48,26 +55,7 @@ def crear_requerimiento(
     servicio: ServicioRequerimientos = Depends(obtener_servicio_requerimientos),
 ) -> IncidenteResponse | SolicitudResponse:
     """Crea un Incidente o una Solicitud (según `tipo`) a nombre del usuario actual."""
-    if isinstance(datos, CrearIncidenteRequest):
-        requerimiento = servicio.crear(
-            TipoRequerimiento.INCIDENTE,
-            titulo=datos.titulo,
-            descripcion=datos.descripcion,
-            solicitante_id=usuario_actual.id,
-            urgencia=datos.urgencia,
-            categoria=datos.categoria,
-            servicio=datos.servicio,
-            pasos_reproduccion=datos.pasos_reproduccion,
-        )
-    else:
-        requerimiento = servicio.crear(
-            TipoRequerimiento.SOLICITUD,
-            titulo=datos.titulo,
-            descripcion=datos.descripcion,
-            solicitante_id=usuario_actual.id,
-            categoria=datos.categoria,
-            servicio=datos.servicio,
-        )
+    requerimiento = servicio.crear(usuario_actual, datos.a_datos())
     return _a_respuesta(requerimiento)
 
 

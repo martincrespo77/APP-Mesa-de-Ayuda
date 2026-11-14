@@ -40,16 +40,15 @@ from app.usuarios.excepciones import (
     UsuarioYaInactivoError,
 )
 from tests.actores import UN_SERVICIO, un_operador, un_solicitante, un_supervisor, un_tecnico
-from tests.fakes import FakeRepositorioRequerimientos
 
 PreguntaSobreTicket = Callable[[Usuario, Requerimiento], bool]
 
 
-def _ticket_de(solicitante_id: uuid.UUID) -> Incidente:
+def _ticket_de(solicitante: Usuario) -> Incidente:
     return Incidente(
         titulo="Sin internet",
         descripcion="No navega desde ayer.",
-        solicitante_id=solicitante_id,
+        solicitante=solicitante,
         urgencia=UrgenciaIncidente.IMPORTANTE,
         categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
         servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
@@ -57,8 +56,13 @@ def _ticket_de(solicitante_id: uuid.UUID) -> Incidente:
     )
 
 
+def _ticket_ajeno() -> Incidente:
+    """Ticket abierto por un Solicitante cualquiera (ajeno al actor del test)."""
+    return _ticket_de(un_solicitante(email="otro.cliente@gmail.com"))
+
+
 def _ticket_asignado_a(tecnico: Tecnico) -> Incidente:
-    ticket = _ticket_de(uuid.uuid4())
+    ticket = _ticket_ajeno()
     operador = un_operador()
     ticket.iniciar_analisis(operador)
     ticket.asignar_tecnico(tecnico, operador)
@@ -279,35 +283,33 @@ class TestSolicitante:
         self, solicitante: Solicitante, pregunta: PreguntaSobreTicket
     ) -> None:
         # Assert
-        assert pregunta(solicitante, _ticket_de(solicitante.id))
+        assert pregunta(solicitante, _ticket_de(solicitante))
 
     @pytest.mark.parametrize("pregunta", [VER, COMENTAR, CERRAR, CANCELAR])
     def test_no_puede_operar_sobre_un_ticket_ajeno(
         self, solicitante: Solicitante, pregunta: PreguntaSobreTicket
     ) -> None:
         # Assert
-        assert not pregunta(solicitante, _ticket_de(uuid.uuid4()))
+        assert not pregunta(solicitante, _ticket_ajeno())
 
-    def test_solo_obtiene_sus_propios_tickets_del_repositorio(
+    def test_su_criterio_de_visibilidad_solo_admite_sus_propios_tickets(
         self, solicitante: Solicitante
     ) -> None:
-        # Arrange
-        repositorio = FakeRepositorioRequerimientos()
-        propio, ajeno = _ticket_de(solicitante.id), _ticket_de(uuid.uuid4())
-        repositorio.guardar(propio)
-        repositorio.guardar(ajeno)
+        # Arrange: Specification pura, sin repositorio
+        propio, ajeno = _ticket_de(solicitante), _ticket_ajeno()
 
         # Act
-        visibles = solicitante.requerimientos_visibles(repositorio)
+        criterio = solicitante.criterio_visibilidad()
 
         # Assert
-        assert [r.id for r in visibles] == [propio.id]
+        assert criterio.es_satisfecho_por(propio)
+        assert not criterio.es_satisfecho_por(ajeno)
 
     def test_solo_puede_cancelar_mientras_el_ticket_esta_abierto(
         self, solicitante: Solicitante
     ) -> None:
         # Arrange
-        ticket = _ticket_de(solicitante.id)
+        ticket = _ticket_de(solicitante)
         ticket.iniciar_analisis(un_operador())
 
         # Assert
@@ -320,7 +322,7 @@ class TestSolicitante:
         self, solicitante: Solicitante, pregunta: PreguntaSobreTicket
     ) -> None:
         # Assert: ni siquiera sobre los propios
-        assert not pregunta(solicitante, _ticket_de(solicitante.id))
+        assert not pregunta(solicitante, _ticket_de(solicitante))
 
     def test_su_comentario_no_reabre_un_ticket_resuelto(self, solicitante: Solicitante) -> None:
         # Assert
@@ -359,17 +361,16 @@ class TestEmpleado:
     @pytest.mark.parametrize("empleado", [un_operador(), un_tecnico(), un_supervisor()])
     def test_ve_cualquier_ticket(self, empleado: Empleado) -> None:
         # Assert
-        assert empleado.puede_ver(_ticket_de(uuid.uuid4()))
+        assert empleado.puede_ver(_ticket_ajeno())
 
     @pytest.mark.parametrize("empleado", [un_operador(), un_tecnico(), un_supervisor()])
-    def test_obtiene_la_bandeja_completa_del_repositorio(self, empleado: Empleado) -> None:
-        # Arrange
-        repositorio = FakeRepositorioRequerimientos()
-        for _ in range(2):
-            repositorio.guardar(_ticket_de(uuid.uuid4()))
+    def test_su_criterio_de_visibilidad_es_la_bandeja_completa(self, empleado: Empleado) -> None:
+        # Act
+        criterio = empleado.criterio_visibilidad()
 
-        # Act & Assert
-        assert len(empleado.requerimientos_visibles(repositorio)) == 2
+        # Assert
+        assert criterio.es_satisfecho_por(_ticket_ajeno())
+        assert criterio.es_satisfecho_por(_ticket_de(un_solicitante()))
 
     @pytest.mark.parametrize("clase", [Operador, Tecnico, Supervisor])
     def test_puede_consultar_tecnicos(self, clase: type[Empleado]) -> None:
@@ -391,14 +392,14 @@ class TestOperador:
         self, operador: Operador, pregunta: PreguntaSobreTicket
     ) -> None:
         # Assert
-        assert pregunta(operador, _ticket_de(uuid.uuid4()))
+        assert pregunta(operador, _ticket_ajeno())
 
     @pytest.mark.parametrize("pregunta", [INICIAR_PROGRESO, RESOLVER, DERIVAR])
     def test_no_puede_trabajar_tecnicamente_un_ticket(
         self, operador: Operador, pregunta: PreguntaSobreTicket
     ) -> None:
         # Assert
-        assert not pregunta(operador, _ticket_de(uuid.uuid4()))
+        assert not pregunta(operador, _ticket_ajeno())
 
     def test_su_comentario_reabre_un_ticket_resuelto(self, operador: Operador) -> None:
         # Assert

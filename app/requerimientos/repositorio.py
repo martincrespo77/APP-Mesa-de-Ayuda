@@ -1,15 +1,20 @@
 """Puerto de persistencia del dominio de requerimientos (Dependency Inversion).
 
 `Requerimiento` es la abstracción retornada: la implementación concreta
-(PyMongo en Paso 5, o `FakeRepositorioRequerimientos` en tests) decide cómo
+(PyMongo, o `FakeRepositorioRequerimientos` en tests) decide cómo
 reconstruir un `Incidente` o una `Solicitud` a partir de los datos crudos,
 sin que los servicios de aplicación conozcan ese detalle.
+
+La visibilidad por actor no es un método por rol (`listar_por_solicitante`,
+...): el repositorio ejecuta el `CriterioVisibilidad` que le devuelve el
+propio actor (Patrón Specification).
 """
 
 import uuid
 from abc import ABC, abstractmethod
 
 from app.requerimientos.dominio.base import Requerimiento
+from app.requerimientos.dominio.criterios.base import CriterioVisibilidad
 
 
 class RepositorioRequerimientos(ABC):
@@ -25,8 +30,8 @@ class RepositorioRequerimientos(ABC):
 
     @abstractmethod
     def listar_todos(self) -> list[Requerimiento]:
-        """Devuelve todos los requerimientos (visibilidad de Operador/Técnico/Supervisor)."""
+        """Devuelve todos los requerimientos, sin restricción de visibilidad."""
 
     @abstractmethod
-    def listar_por_solicitante(self, solicitante_id: uuid.UUID) -> list[Requerimiento]:
-        """Devuelve solo los requerimientos creados por ese solicitante (visibilidad propia)."""
+    def listar_por_criterio(self, criterio: CriterioVisibilidad) -> list[Requerimiento]:
+        """Devuelve los requerimientos que satisfacen `criterio`."""
