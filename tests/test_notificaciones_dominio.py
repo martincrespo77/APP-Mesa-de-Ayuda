@@ -11,6 +11,7 @@ from app.notificaciones.excepciones import NotificacionNoEncontradaError
 from app.notificaciones.observador import ObservadorRequerimiento
 from app.notificaciones.observador_logger import ObservadorLogger
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
+from tests.actores import un_supervisor
 
 
 class _ObservadorEspia(ObservadorRequerimiento):
@@ -154,20 +155,20 @@ class TestNotificacion:
 
     def test_sabe_a_que_supervisor_esta_dirigida(self) -> None:
         # Arrange
-        supervisor_id = uuid.uuid4()
-        notificacion = _notificacion_para(supervisor_id)
+        supervisor = un_supervisor()
+        notificacion = _notificacion_para(supervisor.id)
 
         # Assert
-        assert notificacion.es_para(supervisor_id)
-        assert not notificacion.es_para(uuid.uuid4())
+        assert notificacion.es_para(supervisor)
+        assert not notificacion.es_para(un_supervisor(email="otra@comunicarlos.com.ar"))
 
     def test_su_supervisor_puede_marcarla_leida(self) -> None:
         # Arrange
-        supervisor_id = uuid.uuid4()
-        notificacion = _notificacion_para(supervisor_id)
+        supervisor = un_supervisor()
+        notificacion = _notificacion_para(supervisor.id)
 
         # Act
-        notificacion.marcar_leida_por(supervisor_id)
+        notificacion.marcar_leida_por(supervisor)
 
         # Assert
         assert notificacion.leida is True
@@ -178,7 +179,7 @@ class TestNotificacion:
 
         # Act & Assert: se reporta como inexistente, no como prohibida
         with pytest.raises(NotificacionNoEncontradaError):
-            notificacion.marcar_leida_por(uuid.uuid4())
+            notificacion.marcar_leida_por(un_supervisor())
         assert notificacion.leida is False
 
 

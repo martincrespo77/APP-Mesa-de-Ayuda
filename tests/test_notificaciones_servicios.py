@@ -8,6 +8,7 @@ from app.notificaciones.dominio import Notificacion
 from app.notificaciones.excepciones import NotificacionNoEncontradaError
 from app.notificaciones.servicios import ServicioNotificaciones
 from app.requerimientos.eventos import TipoEventoRequerimiento
+from tests.actores import un_supervisor
 from tests.fakes import FakeRepositorioNotificaciones
 
 
@@ -54,12 +55,12 @@ class TestMarcarLeida:
         self, servicio: ServicioNotificaciones, repositorio: FakeRepositorioNotificaciones
     ) -> None:
         # Arrange
-        supervisor_id = uuid.uuid4()
-        notificacion = _crear_notificacion(supervisor_id)
+        supervisor = un_supervisor()
+        notificacion = _crear_notificacion(supervisor.id)
         repositorio.guardar(notificacion)
 
         # Act
-        resultado = servicio.marcar_leida(notificacion.id, supervisor_id)
+        resultado = servicio.marcar_leida(notificacion.id, supervisor)
 
         # Assert
         assert resultado.leida is True
@@ -70,7 +71,7 @@ class TestMarcarLeida:
     ) -> None:
         # Act & Assert
         with pytest.raises(NotificacionNoEncontradaError):
-            servicio.marcar_leida(uuid.uuid4(), uuid.uuid4())
+            servicio.marcar_leida(uuid.uuid4(), un_supervisor())
 
     def test_marcar_leida_de_otro_supervisor_lanza_error(
         self, servicio: ServicioNotificaciones, repositorio: FakeRepositorioNotificaciones
@@ -81,4 +82,4 @@ class TestMarcarLeida:
 
         # Act & Assert
         with pytest.raises(NotificacionNoEncontradaError):
-            servicio.marcar_leida(notificacion.id, uuid.uuid4())
+            servicio.marcar_leida(notificacion.id, un_supervisor())

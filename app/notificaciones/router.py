@@ -37,5 +37,5 @@ def marcar_notificacion_leida(
     usuario_actual: Usuario = Depends(obtener_usuario_actual),
     servicio: ServicioNotificaciones = Depends(obtener_servicio_notificaciones),
 ) -> NotificacionResponse:
-    notificacion = servicio.marcar_leida(notificacion_id, usuario_actual.id)
+    notificacion = servicio.marcar_leida(notificacion_id, usuario_actual)
     return NotificacionResponse.model_validate(notificacion)
