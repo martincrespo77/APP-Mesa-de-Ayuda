@@ -1,4 +1,10 @@
-"""Enumeraciones de estado y tipo del dominio de requerimientos.
+"""Códigos estables del dominio de requerimientos (estado y tipo).
+
+Son identificadores inmutables para persistencia, DTOs y discriminadores
+polimórficos — igual que `RolUsuario` para la jerarquía `Usuario` —, nunca
+para decidir comportamiento con `if`. El comportamiento de cada estado vive
+en su clase del paquete `estados/` (Patrón State); `FabricaEstados` es el
+único lugar que traduce un `EstadoRequerimiento` a su clase.
 
 `EstadoRequerimiento` no incluye un valor `CREADO`: el requerimiento nace
 directamente en `ABIERTO` (el "[ CREADO ]" del diagrama de la especificación
@@ -10,7 +16,7 @@ from enum import StrEnum
 
 
 class EstadoRequerimiento(StrEnum):
-    """Ciclo de vida de un `Requerimiento`."""
+    """Código persistible de cada estado del ciclo de vida de un `Requerimiento`."""
 
     ABIERTO = "ABIERTO"
     EN_ANALISIS = "EN_ANALISIS"

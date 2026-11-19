@@ -6,6 +6,9 @@ para el body de creación — decisión de grilling del 2026-09-11, en lugar
 de una `SchemaFactory` manual (esa técnica, de
 `13_serializacion_polimorfica.md`, es para los DbSchemas de Mongo del
 Paso 5, no para esta capa de presentación).
+
+Cada request de creación sabe traducirse a su Value Object de dominio
+(`a_datos()`): el router no necesita `isinstance` para saber qué tipo llegó.
 """
 
 import uuid
@@ -15,7 +18,8 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.compartido.dominio import ServicioComunicarlos
-from app.requerimientos.dominio.estados import EstadoRequerimiento
+from app.requerimientos.dominio.codigos import EstadoRequerimiento
+from app.requerimientos.dominio.creacion import DatosIncidente, DatosRequerimiento, DatosSolicitud
 from app.requerimientos.dominio.incidente import CategoriaIncidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud
 from app.requerimientos.eventos import TipoEventoRequerimiento
@@ -32,6 +36,16 @@ class CrearIncidenteRequest(BaseModel):
     servicio: ServicioComunicarlos
     pasos_reproduccion: str = Field(min_length=1)
 
+    def a_datos(self) -> DatosRequerimiento:
+        return DatosIncidente(
+            titulo=self.titulo,
+            descripcion=self.descripcion,
+            servicio=self.servicio,
+            urgencia=self.urgencia,
+            categoria=self.categoria,
+            pasos_reproduccion=self.pasos_reproduccion,
+        )
+
 
 class CrearSolicitudRequest(BaseModel):
     tipo: Literal["SOLICITUD"] = "SOLICITUD"
@@ -39,6 +53,14 @@ class CrearSolicitudRequest(BaseModel):
     descripcion: str = Field(min_length=1)
     categoria: CategoriaSolicitud
     servicio: ServicioComunicarlos
+
+    def a_datos(self) -> DatosRequerimiento:
+        return DatosSolicitud(
+            titulo=self.titulo,
+            descripcion=self.descripcion,
+            servicio=self.servicio,
+            categoria=self.categoria,
+        )
 
 
 CrearRequerimientoRequest = Annotated[

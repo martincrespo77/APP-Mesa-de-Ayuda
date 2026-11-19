@@ -15,6 +15,10 @@ se prioriza la escritura/lectura atómica del agregado completo.
 Mapeo polimórfico: un diccionario `TipoRequerimiento -> función` por
 dirección (serializar/deserializar), simétrico al catálogo que ya usa
 `FabricaRequerimientos` — sin una jerarquía `DbSchema` paralela.
+
+Visibilidad: `listar_por_criterio` ejecuta el `CriterioVisibilidad` de
+dominio pidiéndole que se traduzca con `_TraductorMongo` (double dispatch:
+cada criterio llama al método que le corresponde; sin `isinstance`).
 """
 
 import uuid
@@ -27,12 +31,14 @@ from pymongo.database import Database
 from app.compartido.dominio import ServicioComunicarlos
 from app.infraestructura.database import COLECCION_REQUERIMIENTOS
 from app.requerimientos.dominio.base import Requerimiento
+from app.requerimientos.dominio.codigos import EstadoRequerimiento, TipoRequerimiento
 from app.requerimientos.dominio.comentario import Comentario
-from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerimiento
+from app.requerimientos.dominio.criterios.base import CriterioVisibilidad
 from app.requerimientos.dominio.incidente import CategoriaIncidente, Incidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud, Solicitud
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
 from app.requerimientos.repositorio import RepositorioRequerimientos
+from app.usuarios.dominio import Usuario
 
 
 class RepositorioRequerimientosMongo(RepositorioRequerimientos):
@@ -52,9 +58,19 @@ class RepositorioRequerimientosMongo(RepositorioRequerimientos):
     def listar_todos(self) -> list[Requerimiento]:
         return [_a_dominio(documento) for documento in self._coleccion.find()]
 
-    def listar_por_solicitante(self, solicitante_id: uuid.UUID) -> list[Requerimiento]:
-        filtro = {"solicitante_id": str(solicitante_id)}
+    def listar_por_criterio(self, criterio: CriterioVisibilidad) -> list[Requerimiento]:
+        filtro = criterio.traducir(_TraductorMongo())
         return [_a_dominio(documento) for documento in self._coleccion.find(filtro)]
+
+
+class _TraductorMongo:
+    """`TraductorCriterios` que convierte cada criterio en un filtro de PyMongo."""
+
+    def todos(self) -> dict[str, Any]:
+        return {}
+
+    def abiertos_por(self, solicitante: Usuario) -> dict[str, Any]:
+        return {"solicitante_id": str(solicitante.id)}
 
 
 # -- Eventos de auditoría (subdocumento embebido) -----------------------------

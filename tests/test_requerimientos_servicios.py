@@ -19,7 +19,8 @@ from app.compartido.dominio import ServicioComunicarlos
 from app.notificaciones.despachador import DespachadorEventos
 from app.notificaciones.observador import ObservadorRequerimiento
 from app.requerimientos.dominio.base import Requerimiento
-from app.requerimientos.dominio.estados import EstadoRequerimiento, TipoRequerimiento
+from app.requerimientos.dominio.codigos import EstadoRequerimiento, TipoRequerimiento
+from app.requerimientos.dominio.creacion import DatosIncidente, DatosSolicitud
 from app.requerimientos.dominio.incidente import CategoriaIncidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
@@ -29,7 +30,7 @@ from app.requerimientos.excepciones import (
     TecnicoInvalidoError,
 )
 from app.requerimientos.servicios import ServicioRequerimientos
-from app.usuarios.dominio import Operador, Solicitante, Tecnico
+from app.usuarios.dominio import Operador, Solicitante, Tecnico, Usuario
 from tests.actores import un_operador, un_solicitante, un_tecnico
 from tests.fakes import FakeRepositorioRequerimientos, FakeRepositorioUsuarios
 
@@ -98,18 +99,17 @@ def tecnico_destino(repo_usuarios: FakeRepositorioUsuarios) -> Tecnico:
     return tecnico
 
 
-def _crear_incidente(
-    servicio: ServicioRequerimientos, solicitante_id: uuid.UUID
-) -> Requerimiento:
+def _crear_incidente(servicio: ServicioRequerimientos, solicitante: Usuario) -> Requerimiento:
     return servicio.crear(
-        TipoRequerimiento.INCIDENTE,
-        titulo="Corte de fibra",
-        descripcion="Sin señal en el sector norte.",
-        solicitante_id=solicitante_id,
-        urgencia=UrgenciaIncidente.IMPORTANTE,
-        categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
-        servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
-        pasos_reproduccion="Reiniciar ONT.",
+        solicitante,
+        DatosIncidente(
+            titulo="Corte de fibra",
+            descripcion="Sin señal en el sector norte.",
+            servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
+            urgencia=UrgenciaIncidente.IMPORTANTE,
+            categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
+            pasos_reproduccion="Reiniciar ONT.",
+        ),
     )
 
 
@@ -121,7 +121,7 @@ class TestCrear:
         solicitante: Solicitante,
     ) -> None:
         # Act
-        requerimiento = _crear_incidente(servicio, solicitante.id)
+        requerimiento = _crear_incidente(servicio, solicitante)
 
         # Assert
         assert repositorio.buscar_por_id(requerimiento.id) is requerimiento
@@ -130,7 +130,7 @@ class TestCrear:
         self, servicio: ServicioRequerimientos, solicitante: Solicitante, espia: _ObservadorEspia
     ) -> None:
         # Act
-        _crear_incidente(servicio, solicitante.id)
+        _crear_incidente(servicio, solicitante)
 
         # Assert
         assert len(espia.eventos_recibidos) == 1
@@ -141,12 +141,13 @@ class TestCrear:
     ) -> None:
         # Act
         requerimiento = servicio.crear(
-            TipoRequerimiento.SOLICITUD,
-            titulo="Alta de servicio",
-            descripcion="Nueva conexión residencial.",
-            solicitante_id=solicitante.id,
-            categoria=CategoriaSolicitud.ALTA_SERVICIO,
-            servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
+            solicitante,
+            DatosSolicitud(
+                titulo="Alta de servicio",
+                descripcion="Nueva conexión residencial.",
+                servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
+                categoria=CategoriaSolicitud.ALTA_SERVICIO,
+            ),
         )
 
         # Assert
@@ -164,8 +165,9 @@ class TestConsultas:
         self, servicio: ServicioRequerimientos, solicitante: Solicitante, operador: Operador
     ) -> None:
         # Arrange
-        propio = _crear_incidente(servicio, solicitante.id)
-        _crear_incidente(servicio, uuid.uuid4())  # de otro solicitante
+        propio = _crear_incidente(servicio, solicitante)
+        otro_solicitante = un_solicitante(email="otro.cliente@gmail.com")
+        _crear_incidente(servicio, otro_solicitante)
 
         # Act
         visibles_para_solicitante = servicio.listar_visibles_para(solicitante)
@@ -179,7 +181,7 @@ class TestConsultas:
         self, servicio: ServicioRequerimientos, solicitante: Solicitante
     ) -> None:
         # Arrange
-        propio = _crear_incidente(servicio, solicitante.id)
+        propio = _crear_incidente(servicio, solicitante)
 
         # Act
         encontrado = servicio.obtener_visible_para(propio.id, solicitante)
@@ -191,7 +193,7 @@ class TestConsultas:
         self, servicio: ServicioRequerimientos, solicitante: Solicitante
     ) -> None:
         # Arrange
-        ajeno = _crear_incidente(servicio, uuid.uuid4())
+        ajeno = _crear_incidente(servicio, un_solicitante(email="otro.cliente@gmail.com"))
 
         # Act & Assert
         with pytest.raises(PermisoDenegadoError):
@@ -215,7 +217,7 @@ class TestTransicionesViaServicio:
         espia: _ObservadorEspia,
     ) -> None:
         # Arrange
-        requerimiento = _crear_incidente(servicio, solicitante.id)
+        requerimiento = _crear_incidente(servicio, solicitante)
 
         # Act
         servicio.iniciar_analisis(requerimiento.id, operador)
@@ -240,7 +242,7 @@ class TestTransicionesViaServicio:
         espia: _ObservadorEspia,
     ) -> None:
         # Arrange
-        requerimiento = _crear_incidente(servicio, solicitante.id)
+        requerimiento = _crear_incidente(servicio, solicitante)
 
         # Act: el error de dominio se propaga tal cual
         with pytest.raises(PermisoDenegadoError):
@@ -259,7 +261,7 @@ class TestTransicionesViaServicio:
         tecnico: Tecnico,
     ) -> None:
         # Arrange
-        requerimiento = _crear_incidente(servicio, solicitante.id)
+        requerimiento = _crear_incidente(servicio, solicitante)
 
         # Act
         servicio.iniciar_analisis(requerimiento.id, operador)
@@ -284,7 +286,7 @@ class TestComentariosYDerivacionViaServicio:
         espia: _ObservadorEspia,
     ) -> None:
         # Arrange
-        requerimiento = _crear_incidente(servicio, solicitante.id)
+        requerimiento = _crear_incidente(servicio, solicitante)
 
         # Act
         comentario = servicio.agregar_comentario(requerimiento.id, "¿Alguna novedad?", solicitante)
@@ -304,7 +306,7 @@ class TestComentariosYDerivacionViaServicio:
         tecnico: Tecnico,
     ) -> None:
         # Arrange: lleva el incidente hasta RESUELTO
-        requerimiento = _crear_incidente(servicio, solicitante.id)
+        requerimiento = _crear_incidente(servicio, solicitante)
         servicio.iniciar_analisis(requerimiento.id, operador)
         servicio.asignar_tecnico(requerimiento.id, tecnico.id, operador)
         servicio.iniciar_progreso(requerimiento.id, tecnico)
@@ -331,7 +333,7 @@ class TestComentariosYDerivacionViaServicio:
         tecnico_destino: Tecnico,
     ) -> None:
         # Arrange
-        requerimiento = _crear_incidente(servicio, solicitante.id)
+        requerimiento = _crear_incidente(servicio, solicitante)
         servicio.iniciar_analisis(requerimiento.id, operador)
         servicio.asignar_tecnico(requerimiento.id, tecnico.id, operador)
 
@@ -357,7 +359,7 @@ class TestBusquedaDelTecnicoDestino:
         operador: Operador,
     ) -> None:
         # Arrange
-        requerimiento = _crear_incidente(servicio, solicitante.id)
+        requerimiento = _crear_incidente(servicio, solicitante)
         servicio.iniciar_analisis(requerimiento.id, operador)
 
         # Act & Assert
@@ -375,7 +377,7 @@ class TestBusquedaDelTecnicoDestino:
         tecnico: Tecnico,
     ) -> None:
         # Arrange
-        requerimiento = _crear_incidente(servicio, solicitante.id)
+        requerimiento = _crear_incidente(servicio, solicitante)
         servicio.iniciar_analisis(requerimiento.id, operador)
         servicio.asignar_tecnico(requerimiento.id, tecnico.id, operador)
 
@@ -394,7 +396,7 @@ class TestBusquedaDelTecnicoDestino:
     ) -> None:
         # Arrange: el destino existe, pero el dominio no lo acepta (no es Técnico)
         repo_usuarios.guardar(operador)
-        requerimiento = _crear_incidente(servicio, solicitante.id)
+        requerimiento = _crear_incidente(servicio, solicitante)
         servicio.iniciar_analisis(requerimiento.id, operador)
         servicio.asignar_tecnico(requerimiento.id, tecnico.id, operador)
 

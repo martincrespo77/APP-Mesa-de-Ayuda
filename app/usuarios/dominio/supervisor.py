@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 
 from app.compartido.dominio import RolUsuario
 from app.supervision.dominio import RelacionSupervision
-from app.supervision.excepciones import RolNoSupervisableError
 from app.usuarios.dominio.empleado import Empleado
 from app.usuarios.dominio.usuario import Usuario
 
@@ -30,12 +29,9 @@ class Supervisor(Empleado):
         """Establece una relación de supervisión sobre `empleado`.
 
         Es el empleado quien sabe si es supervisable (Operador y Técnico sí;
-        Solicitante y Supervisor no): el Supervisor le pregunta, no mira su rol.
+        Solicitante y Supervisor no): el Supervisor le pide que lo exija, no mira su rol.
         """
-        if not empleado.es_supervisable():
-            raise RolNoSupervisableError(
-                f"El rol '{empleado.rol.value}' no puede ser supervisado."
-            )
+        empleado.exigir_supervisable()
         return RelacionSupervision(supervisor_id=self.id, supervisado_id=empleado.id)
 
     def puede_iniciar_analisis(self, requerimiento: "Requerimiento") -> bool:

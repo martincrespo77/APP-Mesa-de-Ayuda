@@ -11,6 +11,7 @@ import uuid
 from app.notificaciones.dominio import Notificacion
 from app.notificaciones.repositorio import RepositorioNotificaciones
 from app.requerimientos.dominio.base import Requerimiento
+from app.requerimientos.dominio.criterios.base import CriterioVisibilidad
 from app.requerimientos.repositorio import RepositorioRequerimientos
 from app.supervision.dominio import RelacionSupervision
 from app.supervision.repositorio import RepositorioSupervision
@@ -55,10 +56,8 @@ class FakeRepositorioRequerimientos(RepositorioRequerimientos):
     def listar_todos(self) -> list[Requerimiento]:
         return list(self._requerimientos.values())
 
-    def listar_por_solicitante(self, solicitante_id: uuid.UUID) -> list[Requerimiento]:
-        return [
-            req for req in self._requerimientos.values() if req.solicitante_id == solicitante_id
-        ]
+    def listar_por_criterio(self, criterio: CriterioVisibilidad) -> list[Requerimiento]:
+        return [req for req in self._requerimientos.values() if criterio.es_satisfecho_por(req)]
 
 
 class FakeRepositorioSupervision(RepositorioSupervision):

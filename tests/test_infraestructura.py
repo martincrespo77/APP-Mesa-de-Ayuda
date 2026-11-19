@@ -22,12 +22,12 @@ from app.infraestructura.repo_requerimientos import RepositorioRequerimientosMon
 from app.infraestructura.repo_supervision import RepositorioSupervisionMongo
 from app.infraestructura.repo_usuarios import RepositorioUsuariosMongo
 from app.notificaciones.dominio import Notificacion
-from app.requerimientos.dominio.estados import EstadoRequerimiento
+from app.requerimientos.dominio.codigos import EstadoRequerimiento
 from app.requerimientos.dominio.incidente import CategoriaIncidente, Incidente, UrgenciaIncidente
 from app.requerimientos.dominio.solicitud import CategoriaSolicitud, Solicitud
 from app.requerimientos.eventos import EventoRequerimiento, TipoEventoRequerimiento
 from app.supervision.dominio import RelacionSupervision
-from app.usuarios.dominio import Usuario
+from app.usuarios.dominio import Solicitante, Usuario
 from tests.actores import nuevo_usuario, un_operador, un_solicitante, un_tecnico
 
 
@@ -188,16 +188,21 @@ class TestRepositorioUsuariosMongoGuardarYBuscar:
 
 
 @pytest.fixture
-def solicitante_id() -> uuid.UUID:
-    return uuid.uuid4()
+def solicitante() -> Solicitante:
+    return un_solicitante()
 
 
 @pytest.fixture
-def incidente(solicitante_id: uuid.UUID) -> Incidente:
+def solicitante_id(solicitante: Solicitante) -> uuid.UUID:
+    return solicitante.id
+
+
+@pytest.fixture
+def incidente(solicitante: Solicitante) -> Incidente:
     return Incidente(
         titulo="Corte de fibra troncal",
         descripcion="Sin conectividad en el barrio Centro.",
-        solicitante_id=solicitante_id,
+        solicitante=solicitante,
         urgencia=UrgenciaIncidente.CRITICO,
         categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
         servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
@@ -228,13 +233,13 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
         assert encontrado.historial[0].tipo_evento == TipoEventoRequerimiento.CREACION
 
     def test_guardar_y_buscar_solicitud_devuelve_la_misma_solicitud(
-        self, repo_requerimientos: RepositorioRequerimientosMongo, solicitante_id: uuid.UUID
+        self, repo_requerimientos: RepositorioRequerimientosMongo, solicitante: Solicitante
     ) -> None:
         # Arrange
         solicitud = Solicitud(
             titulo="Alta de nuevo abono",
             descripcion="Cliente solicita nueva conexión.",
-            solicitante_id=solicitante_id,
+            solicitante=solicitante,
             categoria=CategoriaSolicitud.ALTA_SERVICIO,
             servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         )
@@ -296,13 +301,13 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
         self,
         repo_requerimientos: RepositorioRequerimientosMongo,
         incidente: Incidente,
-        solicitante_id: uuid.UUID,
+        solicitante: Solicitante,
     ) -> None:
         # Arrange
         solicitud = Solicitud(
             titulo="Cambio de abono",
             descripcion="Upgrade a plan superior.",
-            solicitante_id=solicitante_id,
+            solicitante=solicitante,
             categoria=CategoriaSolicitud.BAJA_SERVICIO,
             servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
         )
@@ -316,17 +321,17 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
         assert {type(r) for r in todos} == {Incidente, Solicitud}
         assert {r.id for r in todos} == {incidente.id, solicitud.id}
 
-    def test_listar_por_solicitante_filtra_correctamente(
+    def test_listar_por_criterio_de_un_solicitante_filtra_sus_propios(
         self,
         repo_requerimientos: RepositorioRequerimientosMongo,
         incidente: Incidente,
+        solicitante: Solicitante,
     ) -> None:
         # Arrange
-        otro_solicitante_id = uuid.uuid4()
         otro_incidente = Incidente(
             titulo="Otro corte",
             descripcion="Otro barrio.",
-            solicitante_id=otro_solicitante_id,
+            solicitante=un_solicitante(email="otro.cliente@gmail.com"),
             urgencia=UrgenciaIncidente.MENOR,
             categoria=CategoriaIncidente.BLOQUEO_SIM,
             servicio=ServicioComunicarlos.TELEVISION,
@@ -335,11 +340,23 @@ class TestRepositorioRequerimientosMongoGuardarYBuscar:
         repo_requerimientos.guardar(incidente)
         repo_requerimientos.guardar(otro_incidente)
 
-        # Act
-        propios = repo_requerimientos.listar_por_solicitante(incidente.solicitante_id)
+        # Act: el criterio lo aporta el propio actor (Specification)
+        propios = repo_requerimientos.listar_por_criterio(solicitante.criterio_visibilidad())
 
         # Assert
         assert {r.id for r in propios} == {incidente.id}
+
+    def test_listar_por_criterio_de_un_empleado_trae_la_bandeja_completa(
+        self, repo_requerimientos: RepositorioRequerimientosMongo, incidente: Incidente
+    ) -> None:
+        # Arrange
+        repo_requerimientos.guardar(incidente)
+
+        # Act
+        todos = repo_requerimientos.listar_por_criterio(un_operador().criterio_visibilidad())
+
+        # Assert
+        assert {r.id for r in todos} == {incidente.id}
 
     def test_reconstruye_sin_disparar_un_evento_creacion_nuevo(
         self, repo_requerimientos: RepositorioRequerimientosMongo, incidente: Incidente

@@ -17,9 +17,12 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.compartido.dominio import ServicioComunicarlos
+from app.compartido.excepciones import DatoInvalidoError
 from app.requerimientos.dominio import (
     CategoriaIncidente,
     CategoriaSolicitud,
+    DatosIncidente,
+    DatosSolicitud,
     EstadoRequerimiento,
     Incidente,
     Solicitud,
@@ -85,7 +88,7 @@ def incidente(solicitante: Solicitante) -> Incidente:
     return Incidente(
         titulo="Corte de fibra troncal",
         descripcion="Sin conectividad en el barrio Centro.",
-        solicitante_id=solicitante.id,
+        solicitante=solicitante,
         urgencia=UrgenciaIncidente.CRITICO,
         categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
         servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
@@ -119,65 +122,65 @@ class TestIncidenteCreacion:
         assert len(incidente.historial) == 1
         assert incidente.historial[0].tipo_evento == TipoEventoRequerimiento.CREACION
 
-    def test_urgencia_invalida_lanza_type_error(self, solicitante_id: uuid.UUID) -> None:
+    def test_urgencia_invalida_lanza_type_error(self, solicitante: Solicitante) -> None:
         # Act & Assert
         with pytest.raises(TypeError):
             Incidente(
                 titulo="x",
                 descripcion="y",
-                solicitante_id=solicitante_id,
+                solicitante=solicitante,
                 urgencia="CRITICO",  # type: ignore[arg-type]
                 categoria=CategoriaIncidente.SERVICIO_INACCESIBLE,
                 servicio=ServicioComunicarlos.TELEVISION,
                 pasos_reproduccion="pasos",
             )
 
-    def test_categoria_invalida_lanza_type_error(self, solicitante_id: uuid.UUID) -> None:
+    def test_categoria_invalida_lanza_type_error(self, solicitante: Solicitante) -> None:
         # Act & Assert
         with pytest.raises(TypeError):
             Incidente(
                 titulo="x",
                 descripcion="y",
-                solicitante_id=solicitante_id,
+                solicitante=solicitante,
                 urgencia=UrgenciaIncidente.MENOR,
                 categoria="SERVICIO_INACCESIBLE",  # type: ignore[arg-type]
                 servicio=ServicioComunicarlos.TELEVISION,
                 pasos_reproduccion="pasos",
             )
 
-    def test_servicio_invalido_lanza_type_error(self, solicitante_id: uuid.UUID) -> None:
+    def test_servicio_invalido_lanza_type_error(self, solicitante: Solicitante) -> None:
         # Act & Assert
         with pytest.raises(TypeError):
             Incidente(
                 titulo="x",
                 descripcion="y",
-                solicitante_id=solicitante_id,
+                solicitante=solicitante,
                 urgencia=UrgenciaIncidente.MENOR,
                 categoria=CategoriaIncidente.BLOQUEO_SIM,
                 servicio="TELEVISION",  # type: ignore[arg-type]
                 pasos_reproduccion="pasos",
             )
 
-    def test_titulo_vacio_lanza_value_error(self, solicitante_id: uuid.UUID) -> None:
+    def test_titulo_vacio_lanza_value_error(self, solicitante: Solicitante) -> None:
         # Act & Assert
         with pytest.raises(ValueError):
             Incidente(
                 titulo="   ",
                 descripcion="y",
-                solicitante_id=solicitante_id,
+                solicitante=solicitante,
                 urgencia=UrgenciaIncidente.MENOR,
                 categoria=CategoriaIncidente.BLOQUEO_SIM,
                 servicio=ServicioComunicarlos.TELEVISION,
                 pasos_reproduccion="pasos",
             )
 
-    def test_pasos_reproduccion_vacios_lanza_value_error(self, solicitante_id: uuid.UUID) -> None:
+    def test_pasos_reproduccion_vacios_lanza_value_error(self, solicitante: Solicitante) -> None:
         # Act & Assert
         with pytest.raises(ValueError):
             Incidente(
                 titulo="x",
                 descripcion="y",
-                solicitante_id=solicitante_id,
+                solicitante=solicitante,
                 urgencia=UrgenciaIncidente.MENOR,
                 categoria=CategoriaIncidente.BLOQUEO_SIM,
                 servicio=ServicioComunicarlos.TELEVISION,
@@ -186,12 +189,12 @@ class TestIncidenteCreacion:
 
 
 class TestSolicitudCreacion:
-    def test_solicitud_valida_nace_abierta(self, solicitante_id: uuid.UUID) -> None:
+    def test_solicitud_valida_nace_abierta(self, solicitante: Solicitante) -> None:
         # Act
         solicitud = Solicitud(
             titulo="Alta de nuevo abono",
             descripcion="Cliente solicita nueva conexión.",
-            solicitante_id=solicitante_id,
+            solicitante=solicitante,
             categoria=CategoriaSolicitud.ALTA_SERVICIO,
             servicio=ServicioComunicarlos.INTERNET_BANDA_ANCHA,
         )
@@ -200,24 +203,24 @@ class TestSolicitudCreacion:
         assert solicitud.tipo == TipoRequerimiento.SOLICITUD
         assert solicitud.estado == EstadoRequerimiento.ABIERTO
 
-    def test_categoria_invalida_lanza_type_error(self, solicitante_id: uuid.UUID) -> None:
+    def test_categoria_invalida_lanza_type_error(self, solicitante: Solicitante) -> None:
         # Act & Assert
         with pytest.raises(TypeError):
             Solicitud(
                 titulo="x",
                 descripcion="y",
-                solicitante_id=solicitante_id,
+                solicitante=solicitante,
                 categoria="ALTA_SERVICIO",  # type: ignore[arg-type]
                 servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
             )
 
-    def test_servicio_invalido_lanza_type_error(self, solicitante_id: uuid.UUID) -> None:
+    def test_servicio_invalido_lanza_type_error(self, solicitante: Solicitante) -> None:
         # Act & Assert
         with pytest.raises(TypeError):
             Solicitud(
                 titulo="x",
                 descripcion="y",
-                solicitante_id=solicitante_id,
+                solicitante=solicitante,
                 categoria=CategoriaSolicitud.BAJA_SERVICIO,
                 servicio="TELEFONIA_CELULAR",  # type: ignore[arg-type]
             )
@@ -817,43 +820,80 @@ class TestHistorialEsUnaCopiaDefensiva:
         assert len(incidente.comentarios) == 1
 
 
-class TestFabricaRequerimientos:
-    def test_crear_incidente_devuelve_instancia_incidente(self, solicitante_id: uuid.UUID) -> None:
-        # Act
-        req = FabricaRequerimientos.crear(
-            TipoRequerimiento.INCIDENTE,
-            titulo="x",
+class TestDatosDeCreacion:
+    """Los Value Objects de creación construyen la entidad concreta para su
+    solicitante (reemplazan a `FabricaRequerimientos.crear(tipo, **atributos)`)."""
+
+    def test_datos_incidente_construye_un_incidente_del_solicitante(
+        self, solicitante: Solicitante
+    ) -> None:
+        # Arrange
+        datos = DatosIncidente(
+            titulo="  x  ",
             descripcion="y",
-            solicitante_id=solicitante_id,
+            servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
             urgencia=UrgenciaIncidente.IMPORTANTE,
             categoria=CategoriaIncidente.BLOQUEO_SIM,
-            servicio=ServicioComunicarlos.TELEFONIA_CELULAR,
             pasos_reproduccion="p",
         )
+
+        # Act
+        req = datos.construir_para(solicitante)
 
         # Assert
         assert isinstance(req, Incidente)
         assert req.tipo == TipoRequerimiento.INCIDENTE
+        assert req.titulo == "x"
+        assert req.pertenece_a(solicitante)
+        assert req.historial[0].autor_id == solicitante.id
 
-    def test_crear_solicitud_devuelve_instancia_solicitud(self, solicitante_id: uuid.UUID) -> None:
-        # Act
-        req = FabricaRequerimientos.crear(
-            TipoRequerimiento.SOLICITUD,
+    def test_datos_solicitud_construye_una_solicitud_del_solicitante(
+        self, solicitante: Solicitante
+    ) -> None:
+        # Arrange
+        datos = DatosSolicitud(
             titulo="x",
             descripcion="y",
-            solicitante_id=solicitante_id,
-            categoria=CategoriaSolicitud.BAJA_SERVICIO,
             servicio=ServicioComunicarlos.TELEVISION,
+            categoria=CategoriaSolicitud.BAJA_SERVICIO,
         )
+
+        # Act
+        req = datos.construir_para(solicitante)
 
         # Assert
         assert isinstance(req, Solicitud)
         assert req.tipo == TipoRequerimiento.SOLICITUD
+        assert req.pertenece_a(solicitante)
 
+    def test_datos_con_titulo_vacio_no_se_pueden_construir(self) -> None:
+        # Act & Assert: el Value Object se autovalida, antes de tocar la entidad
+        with pytest.raises(DatoInvalidoError):
+            DatosSolicitud(
+                titulo="   ",
+                descripcion="y",
+                servicio=ServicioComunicarlos.TELEVISION,
+                categoria=CategoriaSolicitud.BAJA_SERVICIO,
+            )
+
+    def test_datos_con_enum_crudo_lanzan_type_error(self) -> None:
+        # Act & Assert
+        with pytest.raises(TypeError):
+            DatosIncidente(
+                titulo="x",
+                descripcion="y",
+                servicio=ServicioComunicarlos.TELEVISION,
+                urgencia="CRITICO",  # type: ignore[arg-type]
+                categoria=CategoriaIncidente.BLOQUEO_SIM,
+                pasos_reproduccion="p",
+            )
+
+
+class TestFabricaRequerimientos:
     def test_tipo_no_soportado_lanza_value_error(self) -> None:
         # Act & Assert
         with pytest.raises(ValueError):
-            FabricaRequerimientos.crear("TIPO_INEXISTENTE")  # type: ignore[arg-type]
+            FabricaRequerimientos.reconstruir("TIPO_INEXISTENTE")  # type: ignore[arg-type]
 
 
 class TestReconstruccionDesdePersistencia:
