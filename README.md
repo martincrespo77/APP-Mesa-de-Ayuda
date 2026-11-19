@@ -10,7 +10,7 @@
 
 **Descripción académica:** Proyecto Profesional (PP5) para la Facultad de Informática y Electrónica (FIE). Modela el ciclo de vida completo de atención técnica mediante una jerarquía polimórfica de usuarios (Solicitante, Operador, Técnico, Supervisor), doble despacho (*Double Dispatch*) entre tickets y actores, validación de suscripciones de telecomunicaciones, derivación entre técnicos (interconsulta), reapertura automática auditada y despacho de eventos en tiempo real mediante el patrón Observer.
 
-> ℹ️ **Estado del Proyecto:** Prototipo funcional completo con **372 tests automatizados**, clientes Web y Desktop operativos, y suite de diagramas UML/arquitectura interactiva en [`docs/diagramas/`](docs/diagramas/README.md).
+> ℹ️ **Estado del Proyecto:** Prototipo funcional completo con **422 tests automatizados**, clientes Web y Desktop operativos, y suite de diagramas UML/arquitectura interactiva en [`docs/diagramas/`](docs/diagramas/README.md).
 
 ---
 
@@ -20,9 +20,11 @@
 |---|---|---|
 | **Modelo de Dominio Rico (DDD)** | Cero dominio anémico: la lógica de negocio vive en las entidades de dominio y Value Objects, aplicando *Information Expert* y *Tell, Don't Ask* | ✅ Implementado |
 | **Jerarquía Polimórfica de Usuarios** | `Usuario` (abstracta: menor privilegio) ➔ `Solicitante` / `Empleado` (abstracta) ➔ `Operador`, `Tecnico`, `Supervisor`, instanciados por `FabricaUsuarios` | ✅ Implementado |
-| **Jerarquía de Requerimientos** | `Incidente` (urgencia, categoría, pasos de reproducción) y `Solicitud` (altas/bajas) instanciados por `FabricaRequerimientos` | ✅ Implementado |
+| **Jerarquía de Requerimientos** | `Incidente` (urgencia, categoría, pasos de reproducción) y `Solicitud` (altas/bajas) construidos por `DatosIncidente`/`DatosSolicitud` y reconstruidos desde BD vía `FabricaRequerimientos` | ✅ Implementado |
 | **Doble Despacho (*Double Dispatch*)** | `Requerimiento` consulta a `actor.puede_*(self)` y el actor consulta al ticket con `pertenece_a(self)` o `esta_asignado_a(self)` sin violar encapsulamiento | ✅ Implementado |
-| **Value Objects Inmutables** | `Email` canónico (normalización y validación por construcción), eliminando `@staticmethod` repetitivos de las entidades | ✅ Implementado |
+| **Patrón State en Ciclo de Vida** | `EstadoTicket` (`EstadoAbierto`, `EstadoEnAnalisis`, `EstadoEnProgreso`, `EstadoResuelto`, `EstadoCerrado`, `EstadoCancelado`) encapsula cada transición sin `if self.estado == ...` | ✅ Implementado |
+| **Specification de Visibilidad** | `Usuario.criterio_visibilidad()` devuelve `CriterioAbiertosPor` o `CriterioTodos` ejecutado por el repositorio sin acoplar entidades a persistencia | ✅ Implementado |
+| **Value Objects Inmutables** | `Email`, `Comentario`, `EventoRequerimiento` y `DatosRequerimiento` validados en `__post_init__`, eliminando `@staticmethod` repetitivos de las entidades | ✅ Implementado |
 | **Servicios Anoréxicos (Thin Services)** | `ServicioRequerimientos` y `ServicioUsuarios` como orquestadores puros: solo recuperan, delegan en el dominio, persisten y despachan eventos | ✅ Implementado |
 | **Seguridad por Capacidades** | En `app/deps.py` se utiliza `requerir_permiso(lambda u: u.puede_...())`, desacoplando la capa HTTP de enums o nombres de roles | ✅ Implementado |
 | **Ciclo de Vida de Tickets** | `ABIERTO` ➔ `EN_ANALISIS` ➔ `EN_PROGRESO` ➔ `RESUELTO` ➔ `CERRADO` (cancelable a `CANCELADO`) | ✅ Implementado |
@@ -33,7 +35,7 @@
 | **Portal Web Responsive** | HTML5 + Vanilla CSS + Vanilla JS (`fetch`), servido estático sin frameworks ni build step | ✅ Fases 1 a 4 completas |
 | **Cliente Escritorio PyQt6** | Cliente nativo con soporte de Modo Conectado (`ApiClienteHttp`) y Modo Demo (`ApiClienteDemo`) | ✅ Implementado |
 | **Persistencia NoSQL** | Repositorios desacoplados con PyMongo sobre MongoDB 7 | ✅ Implementado |
-| **Testing & Calidad** | 372 tests (pytest + mongomock + fakes en memoria), `mypy --strict`, `ruff` | ✅ 372 PASS / 0 FAIL |
+| **Testing & Calidad** | 422 tests (pytest + mongomock + fakes en memoria), `mypy --strict`, `ruff` | ✅ 422 PASS / 0 FAIL |
 | **Suite de Diagramas** | Visor HTML interactivo unificado (Casos de Uso, Clases, Flujo y Secuencia) con compilador local | ✅ [`docs/diagramas/`](docs/diagramas/README.md) |
 
 ---
@@ -66,9 +68,10 @@
 ┌────────────────────────────────────────────────────────┐
 │                 DOMINIO RICO (DDD Estricto)            │
 │                                                        │
-│  FabricaRequerimientos ──► Incidente / Solicitud       │
+│  DatosRequerimiento ────► Incidente / Solicitud        │
 │  FabricaUsuarios ────────► Solicitante / Empleados     │
 │  Requerimiento ◄──(Double Dispatch)──► Usuario         │
+│  EstadoTicket (State) · CriterioVisibilidad (Spec)     │
 │  Value Objects ──────────► Email, Comentario, Evento   │
 └──────────────┬──────────────────────────┬──────────────┘
                │ (Eventos)                │ (Repositorios)
@@ -87,11 +90,13 @@
 
 - **Information Expert & Tell, Don't Ask**: Las entidades validan sus transiciones sin exponer atributos internos. Nadie le pregunta el rol al usuario para decidir por él: se le pregunta a la entidad `actor.puede_*(self)` y cada clase contesta polimórficamente.
 - **Double Dispatch (Doble Despacho)**: `Requerimiento` recibe la entidad `actor: Usuario` completa y le consulta si tiene permiso para la acción. El actor le consulta al ticket si le pertenece o si lo tiene asignado (`pertenece_a(self)` / `esta_asignado_a(self)`).
-- **Factory Method**: `FabricaRequerimientos` centraliza la creación polimórfica de `Incidente` y `Solicitud`. `FabricaUsuarios` es el **único lugar del sistema** donde un valor de `RolUsuario` se mapea a su clase concreta correspondiente.
-- **Value Objects Inmutables**: Conceptos atómicos con formato propio como `Email` se modelan como Value Objects (`app/usuarios/dominio/email.py`), garantizando normalización (minúsculas, sin espacios) y validez por construcción sin necesidad de métodos estáticos.
+- **Patrón State**: `Requerimiento` delega todas las transiciones y reglas de su ciclo de vida al objeto `EstadoTicket` (`app/requerimientos/dominio/estados/`), con `FabricaEstados` hidratando cada estado desde su código en BD.
+- **Specification**: Cada rol declara su alcance en `Usuario.criterio_visibilidad()` (`CriterioAbiertosPor`, `CriterioTodos`), y el repositorio lo traduce a consultas sin acoplar la entidad de dominio a la capa de persistencia.
+- **Factory Method y Creación Tipada**: `DatosIncidente` y `DatosSolicitud` validan los datos de entrada y construyen la entidad para el `Usuario` actor (`construir_para(actor)`), mientras `FabricaRequerimientos.reconstruir` reconstruye entidades desde MongoDB. `FabricaUsuarios` es el **único lugar del sistema** donde un valor de `RolUsuario` se mapea a su clase concreta correspondiente.
+- **Value Objects Inmutables**: Conceptos atómicos como `Email`, `Comentario`, `EventoRequerimiento` y `DatosRequerimiento` se validan por construcción (`__init__` / `__post_init__`) sin métodos `@staticmethod` en entidades.
 - **Servicios de Aplicación Anoréxicos**: Los servicios en `app/*/servicios.py` actúan exclusivamente como coordinadores (recuperan entidades del repositorio, invocan la transición de dominio, persisten y despachan eventos). Prohibido validar roles o reglas de negocio dentro de los servicios.
 - **Observer**: `DespachadorEventos` desacopla las consecuencias secundarias de los cambios de estado. `ObservadorLogger` genera trazas de auditoría y `ObservadorNotificacionesMongo` crea alertas persistidas para los supervisores a cargo del operador o técnico involucrado.
-- **Repository & Dependency Inversion**: Los servicios operan contra interfaces abstractas (`RepositorioUsuarios`, `RepositorioRequerimientos`, `RepositorioSupervision`, `RepositorioNotificaciones`). En runtime se usan adaptadores PyMongo, y en pruebas se inyectan fakes en memoria (`tests/fakes.py`), permitiendo ejecutar los **372 tests en segundos**.
+- **Repository & Dependency Inversion**: Los servicios operan contra interfaces abstractas (`RepositorioUsuarios`, `RepositorioRequerimientos`, `RepositorioSupervision`, `RepositorioNotificaciones`). En runtime se usan adaptadores PyMongo, y en pruebas se inyectan fakes en memoria (`tests/fakes.py`), permitiendo ejecutar los **422 tests en segundos**.
 
 Detalle de diagramas UML interactivos: [`docs/diagramas/README.md`](docs/diagramas/README.md)
 
@@ -153,8 +158,8 @@ APP-Mesa-de-Ayuda/
 │   │   ├── servicios.py        # ServicioUsuarios (orquestación pura)
 │   │   └── router.py           # Endpoints FastAPI para gestión y login
 │   ├── requerimientos/         # Módulo de incidentes y solicitudes
-│   │   ├── dominio/            # Subpaquete: Requerimiento, Incidente, Solicitud, Estados
-│   │   ├── fabrica.py          # FabricaRequerimientos (Factory Method)
+│   │   ├── dominio/            # Requerimiento, Incidente, Solicitud, estados/, criterios/, creacion/
+│   │   ├── fabrica.py          # FabricaRequerimientos.reconstruir (hidratación desde BD)
 │   │   ├── repositorio.py      # Interfaz abstracta RepositorioRequerimientos
 │   │   ├── servicios.py        # ServicioRequerimientos (orquestación pura)
 │   │   └── router.py           # Endpoints FastAPI de ciclo de vida
@@ -176,7 +181,7 @@ APP-Mesa-de-Ayuda/
 ├── scripts/
 │   └── seed_mongo.py           # Script idempotente de siembra de datos de prueba
 ├── bruno/                      # Colección completa de peticiones HTTP (Bruno)
-└── tests/                      # Suite de 372 pruebas unitarias y de integración
+└── tests/                      # Suite de 422 pruebas unitarias y de integración
 ```
 
 ---
@@ -278,7 +283,7 @@ uv run python -m desktop.main --demo
 
 ## 🔍 Verificación, Calidad y Tests
 
-Ejecución de la suite completa de **372 pruebas automatizadas**:
+Ejecución de la suite completa de **422 pruebas automatizadas**:
 
 ```bash
 # Tests unitarios y de integración:
