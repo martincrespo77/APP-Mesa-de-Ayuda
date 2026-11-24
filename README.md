@@ -18,14 +18,14 @@
 
 | Feature / Módulo | Descripción Técnica | Estado |
 |---|---|---|
-| **Modelo de Dominio Rico (DDD)** | Cero dominio anémico: la lógica de negocio vive en las entidades de dominio y Value Objects, aplicando *Information Expert* y *Tell, Don't Ask* | ✅ Implementado |
+| **Modelo de Dominio Rico (DDD)** | La lógica de negocio reside en las entidades de dominio y Value Objects, aplicando *Information Expert* y *Tell, Don't Ask* | ✅ Implementado |
 | **Jerarquía Polimórfica de Usuarios** | `Usuario` (abstracta: menor privilegio) ➔ `Solicitante` / `Empleado` (abstracta) ➔ `Operador`, `Tecnico`, `Supervisor`, instanciados por `FabricaUsuarios` | ✅ Implementado |
 | **Jerarquía de Requerimientos** | `Incidente` (urgencia, categoría, pasos de reproducción) y `Solicitud` (altas/bajas) construidos por `DatosIncidente`/`DatosSolicitud` y reconstruidos desde BD vía `FabricaRequerimientos` | ✅ Implementado |
 | **Doble Despacho (*Double Dispatch*)** | `Requerimiento` consulta a `actor.puede_*(self)` y el actor consulta al ticket con `pertenece_a(self)` o `esta_asignado_a(self)` sin violar encapsulamiento | ✅ Implementado |
 | **Patrón State en Ciclo de Vida** | `EstadoTicket` (`EstadoAbierto`, `EstadoEnAnalisis`, `EstadoEnProgreso`, `EstadoResuelto`, `EstadoCerrado`, `EstadoCancelado`) encapsula cada transición sin `if self.estado == ...` | ✅ Implementado |
 | **Specification de Visibilidad** | `Usuario.criterio_visibilidad()` devuelve `CriterioAbiertosPor` o `CriterioTodos` ejecutado por el repositorio sin acoplar entidades a persistencia | ✅ Implementado |
-| **Value Objects Inmutables** | `Email`, `Comentario`, `EventoRequerimiento` y `DatosRequerimiento` validados en `__post_init__`, eliminando `@staticmethod` repetitivos de las entidades | ✅ Implementado |
-| **Servicios Anoréxicos (Thin Services)** | `ServicioRequerimientos` y `ServicioUsuarios` como orquestadores puros: solo recuperan, delegan en el dominio, persisten y despachan eventos | ✅ Implementado |
+| **Value Objects Inmutables** | `Email`, `Comentario`, `EventoRequerimiento` y `DatosRequerimiento` normalizados y validados por construcción | ✅ Implementado |
+| **Servicios de Aplicación (Thin Services)** | `ServicioRequerimientos` y `ServicioUsuarios` como orquestadores de casos de uso: recuperan, delegan en el dominio, persisten y despachan eventos | ✅ Implementado |
 | **Seguridad por Capacidades** | En `app/deps.py` se utiliza `requerir_permiso(lambda u: u.puede_...())`, desacoplando la capa HTTP de enums o nombres de roles | ✅ Implementado |
 | **Ciclo de Vida de Tickets** | `ABIERTO` ➔ `EN_ANALISIS` ➔ `EN_PROGRESO` ➔ `RESUELTO` ➔ `CERRADO` (cancelable a `CANCELADO`) | ✅ Implementado |
 | **Reapertura Automática** | Comentar sobre un ticket `RESUELTO` (por Operador o Técnico) lo devuelve a `EN_PROGRESO` disparando el evento `REAPERTURA` | ✅ Implementado |
@@ -61,7 +61,7 @@
 ┌────────────────────────────────────────────────────────┐
 │             SERVICIOS DE APLICACIÓN (Orquestación Pura)│
 │    `ServicioRequerimientos`, `ServicioUsuarios`, etc.  │
-│    (Cero condicionales `if` de negocio o sobre roles)  │
+│    (Orquestación: repositorio, dominio y eventos)      │
 └────────────────────────┬───────────────────────────────┘
                          │
                          ▼
@@ -93,8 +93,8 @@
 - **Patrón State**: `Requerimiento` delega todas las transiciones y reglas de su ciclo de vida al objeto `EstadoTicket` (`app/requerimientos/dominio/estados/`), con `FabricaEstados` hidratando cada estado desde su código en BD.
 - **Specification**: Cada rol declara su alcance en `Usuario.criterio_visibilidad()` (`CriterioAbiertosPor`, `CriterioTodos`), y el repositorio lo traduce a consultas sin acoplar la entidad de dominio a la capa de persistencia.
 - **Factory Method y Creación Tipada**: `DatosIncidente` y `DatosSolicitud` validan los datos de entrada y construyen la entidad para el `Usuario` actor (`construir_para(actor)`), mientras `FabricaRequerimientos.reconstruir` reconstruye entidades desde MongoDB. `FabricaUsuarios` es el **único lugar del sistema** donde un valor de `RolUsuario` se mapea a su clase concreta correspondiente.
-- **Value Objects Inmutables**: Conceptos atómicos como `Email`, `Comentario`, `EventoRequerimiento` y `DatosRequerimiento` se validan por construcción (`__init__` / `__post_init__`) sin métodos `@staticmethod` en entidades.
-- **Servicios de Aplicación Anoréxicos**: Los servicios en `app/*/servicios.py` actúan exclusivamente como coordinadores (recuperan entidades del repositorio, invocan la transición de dominio, persisten y despachan eventos). Prohibido validar roles o reglas de negocio dentro de los servicios.
+- **Value Objects Inmutables**: Conceptos atómicos como `Email`, `Comentario`, `EventoRequerimiento` y `DatosRequerimiento` se validan y normalizan por construcción (`__init__` / `__post_init__`).
+- **Servicios de Aplicación (Thin Services)**: Los servicios en `app/*/servicios.py` actúan exclusivamente como coordinadores de casos de uso (recuperan entidades del repositorio, invocan la transición de dominio, persisten y despachan eventos).
 - **Observer**: `DespachadorEventos` desacopla las consecuencias secundarias de los cambios de estado. `ObservadorLogger` genera trazas de auditoría y `ObservadorNotificacionesMongo` crea alertas persistidas para los supervisores a cargo del operador o técnico involucrado.
 - **Repository & Dependency Inversion**: Los servicios operan contra interfaces abstractas (`RepositorioUsuarios`, `RepositorioRequerimientos`, `RepositorioSupervision`, `RepositorioNotificaciones`). En runtime se usan adaptadores PyMongo, y en pruebas se inyectan fakes en memoria (`tests/fakes.py`), permitiendo ejecutar los **422 tests en segundos**.
 
@@ -138,7 +138,6 @@ APP-Mesa-de-Ayuda/
 ├── AGENTS.md                   # Invariantes universales de Dominio Rico para agentes de IA
 ├── GEMINI.md                   # Directrices específicas de diseño para Gemini / Antigravity
 ├── CLAUDE.md                   # Directrices específicas de diseño para Claude Code
-├── cambios corregidos.md       # Guía pedagógica en 20 partes para NotebookLM
 ├── pyproject.toml · uv.lock    # Gestión determinista de dependencias con uv
 ├── Dockerfile                  # Imagen multi-stage (uv + non-root user)
 ├── docker-compose.yml          # Orquestación de API FastAPI + MongoDB 7
